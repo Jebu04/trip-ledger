@@ -42,6 +42,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -174,7 +176,14 @@ private fun AppScaffold(navController: NavHostController, hasTrips: Boolean, mai
                                 selected = route == tab.route,
                                 onClick = { navController.openTab(tab.route) },
                                 icon = { Icon(tab.icon, contentDescription = null) },
-                                label = { Text(tab.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                // Shrinks rather than truncating with large text on narrow phones.
+                                label = {
+                                    Text(
+                                        tab.label,
+                                        maxLines = 1,
+                                        autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 12.sp, stepSize = 0.5.sp),
+                                    )
+                                },
                                 colors = NavigationBarItemDefaults.colors(
                                     indicatorColor = MaterialTheme.colorScheme.primaryContainer,
                                     selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,

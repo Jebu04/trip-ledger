@@ -442,14 +442,15 @@ fun SettingsScreen(onOpen: (String) -> Unit, onEditTrip: (Long) -> Unit) {
                             modifier = Modifier.testTag("backup_status"),
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { pickBackupFolder.launch(null) }, modifier = Modifier.testTag("backup_choose_folder")) {
+                    // Stacked full width: side by side the labels wrap on narrow phones.
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedButton(onClick = { pickBackupFolder.launch(null) }, modifier = Modifier.fillMaxWidth().testTag("backup_choose_folder")) {
                             Text(if (settingsNow.autoBackupFolder.isBlank()) "Choose folder" else "Change folder")
                         }
                         OutlinedButton(
                             onClick = { vm.backupNow(context) },
                             enabled = settingsNow.autoBackupFolder.isNotBlank(),
-                            modifier = Modifier.testTag("backup_now"),
+                            modifier = Modifier.fillMaxWidth().testTag("backup_now"),
                         ) { Text("Back up now") }
                     }
                 }

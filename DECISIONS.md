@@ -101,3 +101,31 @@ Things that were ambiguous or needed a judgement call, and what I picked.
   reading text that Compose merges into its parent row). No assertion was removed or loosened.
   Where a failing test pointed at a real weakness, I changed the app instead; those are listed in
   the README.
+
+## Second round (fixes from the phone test and the improvement ideas)
+
+- **English only.** All dates, month and weekday names are formatted in English regardless of the
+  phone's language. Only the number format and first day of week follow the phone's region, and
+  only until you choose them yourself.
+- **Region defaults also apply after an upgrade**, as long as the setting was never chosen. That is
+  why your phone switched to `1 234,56` after the update.
+- **Budget** is stored per trip in home minor units, either for the whole trip or per day. A
+  per-day budget times the trip length gives the trip budget; a trip budget divided by the length
+  gives "Left today".
+- **Shared bills** store the full amount and "my share" separately; totals, statistics and search
+  use my share. **Refunds** are stored as negative amounts and shown as `-€5.00`.
+- **Spreading** divides the home amount evenly over the days, giving leftover cents to the first
+  days so the parts always add up. The total still counts the expense once.
+- **A per-expense rate** overrides the trip rate for that expense only. CSV import keeps a file's
+  rate as a per-expense rate when it differs from the trip's.
+- **Receipt photos** are shrunk to at most 1600 px and stored in the app's private storage. The
+  camera writes through a FileProvider and the gallery uses the system photo picker, so the app
+  still requests no permissions. Photos are not put inside backup files (kept small and text-only).
+- **Automatic backup** runs when the app is opened or left, not in the background: a background
+  scheduler would need WorkManager and still can't promise timing. One file per day, newest 10 kept.
+- **Merge import** matches trips by name, start and end date and home currency, and categories and
+  payment methods by name; expenses already present are skipped, so merging twice is harmless.
+- **Undo** is offered for deleted expenses through a snackbar. Trips and categories keep their
+  confirmation dialogs.
+- **A duplicate** is dated today and does not copy the receipt photo.
+- **Wide screens** (landscape, tablets) get a side navigation rail and content capped at 720 dp wide.

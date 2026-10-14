@@ -27,6 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -582,15 +583,15 @@ private fun CategoryGrid(categories: List<Category>, selectedId: Long, onSelect:
                                 ).padding(4.dp),
                             ) { CategoryBadge(category.icon, category.color, size = 42.dp) }
                             Spacer(Modifier.height(2.dp))
-                            // Two lines and tight spacing so long names like "Accommodation" fit on narrow phones.
+                            // One line that shrinks to fit, so long names like "Accommodation" are never cut or split.
                             Text(
                                 category.name,
                                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp),
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
+                                maxLines = 1,
+                                autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = 11.sp, stepSize = 0.5.sp),
                             )
                         }
                     }

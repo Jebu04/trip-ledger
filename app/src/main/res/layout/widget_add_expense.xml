@@ -7,8 +7,8 @@
     android:background="@drawable/widget_background"
     android:gravity="center"
     android:orientation="horizontal"
-    android:paddingStart="16dp"
-    android:paddingEnd="16dp">
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp">
 
     <ImageView
         android:layout_width="28dp"
@@ -17,12 +17,18 @@
         android:src="@drawable/ic_shortcut_add" />
 
     <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
         android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:autoSizeMaxTextSize="15sp"
+        android:autoSizeMinTextSize="10sp"
+        android:autoSizeTextType="uniform"
+        android:ellipsize="end"
         android:maxLines="1"
         android:text="@string/widget_label"
         android:textColor="#F2F2F2"
         android:textSize="15sp"
+        android:gravity="center_vertical"
         android:textStyle="bold" />
 </LinearLayout>

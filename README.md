@@ -2,25 +2,38 @@
 
 An offline Android app for tracking what you spend while travelling. Kotlin, Jetpack Compose
 (Material 3), Room, single activity, MVVM. All data stays on the device; the app requests no
-permissions at all.
+permissions at all. The whole interface is in English.
 
-- Trips with their own dates, home currency, local currencies and hand-entered exchange rates
-- Expenses grouped by day with subtotals, shown in your home currency with the original amount underneath
-- Statistics: total, daily average, by category (donut + list), per day (bars), biggest expenses, date filter
+- Trips with their own dates, home currency, local currencies, hand-entered exchange rates and an
+  optional budget (for the whole trip or per day)
+- Expenses grouped by day with subtotals, in your home currency with the original amount
+  underneath. An expense can be a refund, a shared bill (only your share counts), spread over
+  several days, left out of the daily average, have its own exchange rate, and carry a receipt photo
+- Fast entry: the most-used categories sit in a row under the amount, above the keyboard; an
+  "Add expense" launcher shortcut and home-screen widget open straight into the form
+- Undo after deleting an expense; a prompt before discarding an unsaved expense or trip; duplicate
+  an expense
+- Statistics: total, daily average, by category, per day, running total against the budget, by
+  payment method, by currency, biggest expenses, and every trip compared, with a date filter
 - Search over title, note and category, with category / date / amount filters, in one trip or all
-- Settings for theme, accent, currencies, categories, payment methods, formats, defaults, summary cards
-- JSON backup and restore, CSV export, delete-all
+- Settings for theme, accent, currencies, categories and payment methods (drag to reorder),
+  formats, defaults and summary cards
+- Backup to a file (replace or merge on import), automatic backups to a folder you choose,
+  CSV export and import, delete-all
 
-See [STATUS.md](STATUS.md) for the current state, the real-phone test and improvement ideas,
-[DECISIONS.md](DECISIONS.md) for the judgement calls, and [screenshots/](screenshots/) for every screen.
+See [STATUS.md](STATUS.md) for the current state and what is left, [DECISIONS.md](DECISIONS.md)
+for the judgement calls, and [screenshots/](screenshots/) for the screens.
 
 ## Current state of your machine
 
-- The emulator **`tripledger_api33`** (Pixel 6, Android 13 / API 33) is running as `emulator-5554`.
-- The debug APK is installed on it, the app is open, and two sample trips are loaded
-  ("Thailand", 35 expenses in THB/USD/EUR, and "Lisbon weekend", 10 expenses).
-- At your later request the debug APK was also installed on your OnePlus Nord CE, with the sample
-  trips loaded. See STATUS.md.
+- The emulator **`tripledger_api33`** (Pixel 6, Android 13 / API 33) is running as
+  `emulator-5554`, with default display settings. The current debug build is installed and open,
+  with the two sample trips loaded ("Thailand", 35 expenses with a €1,500 budget, a shared bill and
+  a flight spread over the trip; "Lisbon weekend", 10 expenses). An "Add expense" widget is on its
+  home screen.
+- Your **OnePlus Nord CE** has the current debug build too. It was installed over the previous
+  version, so the data that was on it is still there.
+- No release build has been made; that waits until you say the app is ready.
 
 ## Build and run
 
@@ -43,138 +56,84 @@ $sdk = "$env:LOCALAPPDATA\Android\Sdk"
 
 Or open the folder in Android Studio and press Run.
 
-Instrumented tests (Git Bash). The script installs on the emulator only:
-
-```bash
-tools/run_android_tests.sh                               # everything
-tools/run_android_tests.sh app.tripledger.AppFlowTest    # one class
-```
-
-**The UI tests wipe the app's data.** Afterwards, reload the demo data with
-Settings → Add sample trips (or the link on the welcome screen).
-
+From Git Bash, `tools/unit.sh` runs the unit tests with a summary, and
+`tools/run_android_tests.sh [class]` runs the instrumented tests on the emulator only.
+**The UI tests wipe the app's data**; reload the demo with Settings → Add sample trips.
 Avoid `gradlew connectedAndroidTest` while a phone is plugged in: it installs on every attached device.
 
-`tools/ui.py` is the small adb driver I used to operate the app by hand (tap by text or test tag,
-type, screenshot); `tools/build_install.sh` builds and installs in one step.
+`tools/ui.py` is the adb driver used to operate the app by hand; `tools/build_install.sh` builds
+and installs on the emulator.
 
 ## What was tested, and the results
 
-All results below are from the final code, on the API 33 emulator.
+All results are from the final code.
 
-| Suite | Where | Tests | Result |
-|---|---|---|---|
-| `MoneyTest`: parsing, formatting, rates, currency conversion, rounding | JVM | 20 | all pass |
-| `StatsTest`: totals, daily average and day counting, day grouping, category shares, per-day series, biggest expenses, search matching, week/date helpers | JVM | 24 | all pass |
-| `BackupTest`: backup JSON round trip and rejection of bad files, CSV content and escaping, settings parsing, sample data sanity | JVM | 13 | all pass |
-| `DatabaseTest`: every Room DAO and the repository (cascading deletes, ordering, category/payment/currency rules, seeding, backup round trip through the database, delete-all) | emulator | 24 | all pass |
-| `AppFlowTest`: Compose UI tests of the real app | emulator | 19 | all pass |
+| Suite | Where | Tests |
+|---|---|---|
+| `MoneyTest`: parsing, formatting (including refunds), rates, per-expense rates, region number formats | JVM | 23 |
+| `StatsTest`: totals, shared bills, refunds, daily average and exclusions, spreading, running total, budgets, payment/currency breakdowns, search, English dates | JVM | 41 |
+| `BackupTest`: backup round trip and old-format files, CSV export and reading back, CSV error messages | JVM | 18 |
+| `DatabaseTest`: every Room DAO and the repository | emulator | 24 |
+| `MigrationAndImportTest`: database upgrade from version 1, merge import, CSV import, undo, drag reordering, region defaults | emulator | 11 |
+| `AppFlowTest`: Compose UI tests of the original flows | emulator | 19 |
+| `NewFeaturesFlowTest`: Compose UI tests of the new features | emulator | 14 |
 
-**100 tests, 0 failures** (57 JVM + 43 instrumented).
+**150 tests, 0 failures** (82 JVM + 68 instrumented). The instrumented suite passed twice on the
+final code: once with the screen narrowed to 360 dp (the width of your phone) and once at the
+emulator's default size. An earlier run at 360 dp with the app's language set to Finnish also
+passed.
 
-The UI tests cover: first launch into creating a trip; trip name validation; switching, renaming
-and deleting trips; add, edit and delete an expense, checking converted and original amounts,
-cards and subtotals; amount validation and the optional title; day grouping and daily average;
-a currency with no rate, then fixing it; a very long title; the entry form surviving activity
-recreation; statistics including custom and preset ranges and empty states; search by title, note
-and category, trip scope, category, amount and date filters; number, currency and date format
-changes taking effect on the entries screen; summary card toggles; theme and accent; defaults for
-new entries; categories add, rename, delete with reassignment; payment methods; delete-all with
-its confirmation; loading sample data.
+### Checked by hand
 
-### Checked by hand through adb, with screenshots
+On the emulator, with screenshots in `screenshots/v2/`:
 
-I drove the installed app as a user would and looked at every screenshot in `screenshots/`:
+- Budget cards, including the red "over budget" state (`01`)
+- The quick category row above the keyboard at 360 dp, and "Accommodation" fitting on one line (`02`)
+- More options: refund, shared bill with split buttons, spreading, own rate, photo, note (`03`, `04`)
+- **Receipt photo through the emulator's real camera app**: captured, shrunk and stored in the
+  app's private folder, shown as a thumbnail and full screen, saved with the expense (`05`, `06`)
+- New statistics panels and the trip comparison (`07`–`09`)
+- Search filter chips and sheet (`10`, `11`)
+- **Automatic backup**: chose a folder through the system picker, "Back up now" wrote the file;
+  then, with a backup due, simply leaving the app wrote a fresh one (`12`, `13`)
+- **Drag-and-drop reordering** of categories, with the new order saved (`14`)
+- **The launcher shortcut and the home-screen widget**, both opening straight into the form (`15`–`18`)
+- Landscape with the side rail (`19`, `20`); 130% text size (`21`–`23`); dark theme (`24`)
+- Logcat: no crashes.
 
-- Welcome, create trip, currency picker, date picker, empty trip (`01`–`06`)
-- Add expense with the keyboard up, filled in, live conversion hint (`07`–`09`)
-- Entries list with sample data, scrolled (`11`, `12`); statistics top to bottom (`13`–`15`)
-- Search with text and filters (`16`, `17`); trips (`18`); settings top to bottom (`19`–`21`)
-- **Backup export, CSV export and import through the real system file picker.** I pulled both
-  files off the emulator and checked them: the backup held all 45 entries with integer amounts,
-  the CSV had 46 rows × 11 columns, a byte-order mark, and its Thailand total (1,107.80) matched
-  the app. I then deleted a trip and restored it from the backup (`22`, `23`, `25`, `26`).
-- A deliberately truncated backup file was rejected and the data was left intact.
-- Categories, category editor, payment methods, currencies, accent and theme dialogs (`27`–`33`)
-- Dark theme on settings, entries, statistics, add expense and the date picker (`34`–`38`)
-- Landscape (`39`, `40`)
-- **Process death:** half-filled the expense form, sent the app to the background, killed the
-  process with `am kill`, reopened it. The form came back with amount, title, category and scroll
-  position intact (`41`).
-- Edit and delete an expense (`42`, `43`); a currency with no rate, in the form, the trip editor
-  and the list banner (`44`, `46`, `47`); the date picker with Sunday as first day (`45`)
-- Logcat after all of that: no crashes, no exceptions from the app.
-- The built APK requests no INTERNET permission (`aapt2 dump permissions`; the only entry is
-  AndroidX's own non-exported internal receiver permission), and the sources contain no network code.
-
-### Problems found during testing, and fixed
-
-- Opening search filters inserted the panel above the results but left the list scrolled to the
-  first result, hiding the category chips. It now scrolls to the top.
-- The search result count scrolled out of view while typing an amount filter. It is now pinned
-  above the list.
-- Opening search filters left the keyboard covering them. The keyboard is now dismissed.
-- Save could be tapped in the instant before a form finished loading and did nothing. It is now
-  disabled until the form is ready.
-- A custom statistics range with only an end date could include days after that date.
-- The category grid in the expense form was tall enough that the keyboard hid a third of it.
-- The import error for a damaged file quoted raw parser output including file contents.
-- The app and its test APK disagreed on the kotlinx-coroutines version; it is now pinned.
+On your phone: the new build installed over the old one, the existing data survived the database
+upgrade, the region number format took effect, and there were no crashes
+(`screenshots/phone/v2_p01_after_upgrade.png`). Most of the phone walk-through was done on the
+previous version (see STATUS.md).
 
 ## Unfinished, untested or known to be imperfect
 
-Please read this part.
+Please read this part; STATUS.md has the full list.
 
-**Not verified**
-
-- **The CSV was never opened in Excel or Google Sheets.** I validated it with a CSV parser only.
-- **The reworded "backup file is damaged" message was not re-checked on screen** after I shortened
-  it; `24_import_rejected.png` shows the old, longer wording. The rejection itself is tested.
-- **Tested on two devices only:** the Pixel 6 emulator (API 33, English) with the full test suite,
-  and by hand on a OnePlus Nord CE (Android 13, Finnish, system dark mode); STATUS.md lists what
-  the phone turned up. Not tested on a tablet, with large font sizes, right-to-left languages,
-  TalkBack, or any other Android version (minSdk is 26 but API 26–32 and 34+ are untested).
-- **The monochrome launcher icon** is compiled in but was not seen in a launcher with themed
-  icons switched on.
-- **Reordering** categories and payment methods is covered by database tests but I did not tap
-  the arrows by hand. **Adding a custom currency** and **deleting a currency** were not exercised
-  through the UI (the rules behind them are database-tested).
-- **Currency symbols** such as ៛ and ₭ depend on the device font; I only looked at €, $, ฿ and ¥.
-- Only the debug build was built and run. There is no release build, signing or minification setup.
-- Performance with thousands of entries is untested. Each day's entries are laid out as one list
-  item and search results as one block, which is fine for a trip but would get slow at that scale.
-
-**Known limitations**
-
-- **Leaving a half-filled form with Back or ✕ discards it without asking.**
-- **One rate per currency per trip.** Changing a rate re-values every expense in that currency on
-  the trip (see DECISIONS.md). There is no per-expense rate.
-- **No negative amounts**, so refunds cannot be recorded.
-- **Import replaces all data**; there is no merge.
-- **English only.** UI text is hard-coded in the Kotlin sources, not in string resources.
-- If the title is left empty it becomes the category name, so the row shows the name twice.
-- "Today" and "Yesterday" labels are worked out when the list loads; with the app left open across
-  midnight they stay stale until something changes or you leave and return to the screen.
-- In landscape the bottom navigation bar takes a large share of the height. Everything scrolls and
-  works, but it is cramped.
-- A statistics range longer than a year only charts its most recent 366 days (totals still cover it all).
-- Reordering is by arrow buttons, not drag-and-drop.
-- The debug APK is about 31 MB, mostly the bundled Material icon set, which only release-build
-  shrinking would trim.
-- Two screenshots are slightly off: `31_currency_edit.png` shows "0.87British Pound" because my
-  test script typed a rate into the name field (my mistake, not an app bug; the data was reset
-  afterwards), and `02`–`06` were taken with a US-dollar home currency before I switched the demo
-  setup to euros.
+- **The monochrome (themed) launcher icon** has never been seen in a launcher with themed icons on.
+- **The CSV export has never been opened in Excel or Google Sheets**; it is validated by a parser
+  and by importing it back.
+- **The new features were exercised by hand on the emulator only.** On your phone I only checked
+  the upgrade and startup before stopping, because you were using it.
+- **Receipt photos are not in backups.** The backup records the file name, but the picture itself
+  stays on the phone. Restoring on another phone shows "Photo missing".
+- **Automatic backup only runs when the app is opened or left**; there is no background service.
+  If a folder becomes unavailable (an SD card removed, say) the status line says the backup failed.
+- Not tested on a tablet, with TalkBack, with right-to-left text, or on Android versions other
+  than 13.
+- Only the debug build exists (about 31 MB, mostly the bundled icon set).
 
 ## Project layout
 
 ```
 app/src/main/java/app/tripledger/
-  data/      Room entities, DAOs, database, Repository, defaults, backup/CSV, sample data
-  domain/    Money maths, conversion, statistics, search filter, date helpers (pure Kotlin)
+  data/      Room entities, DAOs, database and migration, Repository, defaults, backup/CSV,
+             sample data, receipt photos, automatic backup
+  domain/    Money maths, conversion, statistics, budgets, search filter, dates (pure Kotlin)
   ui/        Navigation, view models, theme, components, and one file per screen
+  AddExpenseWidget.kt   the home-screen widget
 app/src/test/         JVM unit tests
-app/src/androidTest/  Room and Compose UI tests
+app/src/androidTest/  Room, migration and Compose UI tests
 tools/                adb driver and emulator-only build/test scripts
-screenshots/          every screen, light and dark
+screenshots/          first version (top level), second version (v2/), your phone (phone/)
 ```

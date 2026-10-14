@@ -167,7 +167,7 @@ fun StatsScreen(onOpenEntry: (Long) -> Unit) {
                     }
                     if (ui.slices.isNotEmpty()) CategoryBreakdown(ui, ref, trip)
                     DailyChart(ui.perDay, ref, trip)
-                    CumulativeChart(ui.cumulative, ui.budgetLine, ref, trip)
+                    CumulativeChart(ui.cumulative, ui.summary.total, ui.budgetLine, ref, trip)
                     if (ui.byPayment.isNotEmpty()) {
                         GroupPanel(
                             title = "By payment method",
@@ -459,7 +459,7 @@ private fun GroupPanel(title: String, tag: String, rows: List<GroupRow>, dec: Ch
 
 /** Running total over the period, with the trip's budget drawn as a dashed line when it has one. */
 @Composable
-private fun CumulativeChart(points: List<DayTotal>, budget: Long?, ref: RefData, trip: Trip) {
+private fun CumulativeChart(points: List<DayTotal>, total: Long, budget: Long?, ref: RefData, trip: Trip) {
     // A single day has no line to draw, but the budget progress is still worth showing.
     if (points.isEmpty() || (points.size < 2 && budget == null)) return
     val line = MaterialTheme.colorScheme.primary
@@ -474,13 +474,23 @@ private fun CumulativeChart(points: List<DayTotal>, budget: Long?, ref: RefData,
         if (budget != null) append(", against a budget of ${ref.money(budget, trip.homeCurrency)}")
     }
     StatsPanel("Running total", Modifier.testTag("cumulative_chart")) {
+        // The caption uses the same total as the summary cards. The line can end lower when part
+        // of a spread expense falls on days after the period; say so rather than leave a mismatch.
         Text(
-            if (budget == null) "${ref.money(last, trip.homeCurrency)} so far"
-            else "${ref.money(last, trip.homeCurrency)} of ${ref.money(budget, trip.homeCurrency)} budget",
+            if (budget == null) "${ref.money(total, trip.homeCurrency)} so far"
+            else "${ref.money(total, trip.homeCurrency)} of ${ref.money(budget, trip.homeCurrency)} budget",
             style = MaterialTheme.typography.bodySmall,
-            color = if (budget != null && last > budget) budgetColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (budget != null && total > budget) budgetColor else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp),
         )
+        if (total != last) {
+            Text(
+                "${ref.money(total - last, trip.homeCurrency)} of that is spread over days after ${Dates.short(points.last().date)}.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
         if (points.size < 2) {
             Spacer(Modifier.height(12.dp))
             return@StatsPanel
