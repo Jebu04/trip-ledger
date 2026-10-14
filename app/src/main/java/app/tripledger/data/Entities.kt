@@ -14,6 +14,10 @@ data class Trip(
     val endDate: Long,
     val homeCurrency: String,
     val createdAt: Long = 0,
+    /** Budget in home minor units; 0 means no budget. */
+    val budgetMinor: Long = 0,
+    /** True when [budgetMinor] is an amount per day rather than for the whole trip. */
+    val budgetPerDay: Boolean = false,
 )
 
 /**
@@ -34,7 +38,10 @@ data class TripCurrency(
     val sortOrder: Int = 0,
 )
 
-/** An expense. [amountMinor] is in minor units of [currency] (cents, satang, ...). */
+/**
+ * An expense. [amountMinor] is in minor units of [currency] (cents, satang, ...) and is negative
+ * for a refund.
+ */
 @Entity(
     tableName = "entries",
     foreignKeys = [
@@ -53,7 +60,20 @@ data class Entry(
     val note: String = "",
     val paymentMethodId: Long? = null,
     val createdAt: Long = 0,
-)
+    /** The part of a shared bill that is mine, in the same currency and sign; null = all of it. */
+    val myShareMinor: Long? = null,
+    /** Number of days, starting at [date], the cost is spread over in per-day figures. */
+    val spreadDays: Int = 1,
+    /** Leaves the expense out of the daily average (it still counts towards the total). */
+    val excludeFromAverage: Boolean = false,
+    /** Rate for this expense only, same meaning as a trip rate; empty = use the trip's rate. */
+    val rateOverride: String = "",
+    /** File name of a receipt photo in the app's private storage; empty = none. */
+    val photo: String = "",
+) {
+    /** What this expense cost me: my share if the bill was shared, otherwise the full amount. */
+    val effectiveMinor: Long get() = myShareMinor ?: amountMinor
+}
 
 @Entity(tableName = "categories")
 data class Category(

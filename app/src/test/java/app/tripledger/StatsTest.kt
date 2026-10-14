@@ -27,9 +27,11 @@ class StatsTest {
 
     private fun entry(
         amount: Long, currency: String = "EUR", category: Long = 1, date: Long = 100,
-        title: String = "x", note: String = "",
+        title: String = "x", note: String = "", share: Long? = null, spread: Int = 1, excluded: Boolean = false,
+        rate: String = "", method: Long? = null,
     ) = Entry(id = nextId++, tripId = 1, amountMinor = amount, currency = currency, categoryId = category,
-        title = title, date = date, note = note)
+        title = title, date = date, note = note, myShareMinor = share, spreadDays = spread,
+        excludeFromAverage = excluded, rateOverride = rate, paymentMethodId = method)
 
     private fun converted(vararg entries: Entry): List<ConvertedEntry> = Stats.convert(entries.toList(), converter)
 
@@ -166,6 +168,123 @@ class StatsTest {
         assertEquals(listOf("big", "thb"), top.map { it.entry.title })
     }
 
+    // ---- shared bills, refunds, own rates ----
+
+    @Test fun aSharedBillCountsOnlyMyShare() {
+        // A 60.00 dinner of which 20.00 is mine, and 800.00 THB (20.00 EUR) of which half is mine.
+        val list = converted(entry(6000, share = 2000), entry(80000, "THB", share = 40000))
+        assertEquals(listOf(2000L, 1000L), list.map { it.homeMinor })
+        assertEquals(3000L, Stats.total(list))
+    }
+
+    @Test fun refundsReduceTheTotal() {
+        val list = converted(entry(5000), entry(-1500), entry(-40000, "THB"))
+        assertEquals(2500L, Stats.total(list))
+        assertEquals(listOf(5000L), Stats.biggest(list, 5).map { it.homeMinor })
+    }
+
+    @Test fun anExpensesOwnRateBeatsTheTripRate() {
+        val list = converted(entry(40000, "THB"), entry(40000, "THB", rate = "32"), entry(1600, "JPY", rate = "160"))
+        assertEquals(listOf(1000L, 1250L, 1000L), list.map { it.homeMinor })
+        assertEquals(0, Stats.unconvertedCount(list))
+    }
+
+    @Test fun aCategoryThatNetsToARefundGetsNoShare() {
+        val slices = Stats.byCategory(converted(entry(3000, category = 1), entry(1000, category = 2), entry(-500, category = 3)))
+        assertEquals(listOf(1L, 2L, 3L), slices.map { it.categoryId })
+        assertEquals(listOf(750, 250, 0), slices.map { it.permille })
+        assertEquals(-500L, slices[2].total)
+    }
+
+    @Test fun totalsByPaymentMethodAndCurrency() {
+        val list = converted(entry(3000, method = 1), entry(40000, "THB", method = 2), entry(1000), entry(999, "JPY", method = 1))
+        val byMethod = Stats.byPaymentMethod(list)
+        assertEquals(listOf<Long?>(1L, null, 2L).toSet(), byMethod.map { it.key }.toSet())
+        assertEquals(3000L, byMethod.first { it.key == 1L }.total) // the yen entry has no rate
+        assertEquals(1000L, byMethod.first { it.key == null }.total)
+        assertEquals(600, byMethod.first { it.key == 1L }.permille)
+        val byCurrency = Stats.byCurrency(list)
+        assertEquals(listOf("EUR", "THB"), byCurrency.map { it.key })
+        assertEquals(listOf(4000L, 1000L), byCurrency.map { it.total })
+        assertEquals(listOf(800, 200), byCurrency.map { it.permille })
+    }
+
+    // ---- spreading and the daily average ----
+
+    @Test fun aSpreadExpenseIsSplitEvenlyAcrossItsDays() {
+        val item = converted(entry(1000, date = 10, spread = 4)).single()
+        val parts = Stats.allocations(item)
+        assertEquals(listOf(10L, 11L, 12L, 13L), parts.map { it.date })
+        assertEquals(listOf(250L, 250L, 250L, 250L), parts.map { it.total })
+    }
+
+    @Test fun leftoverCentsGoToTheFirstDaysSoThePartsAddUp() {
+        val parts = Stats.allocations(converted(entry(1000, date = 10, spread = 3)).single())
+        assertEquals(listOf(334L, 333L, 333L), parts.map { it.total })
+        val refund = Stats.allocations(converted(entry(-1000, date = 10, spread = 3)).single())
+        assertEquals(listOf(-334L, -333L, -333L), refund.map { it.total })
+        val tiny = Stats.allocations(converted(entry(2, date = 10, spread = 5)).single())
+        assertEquals(listOf(1L, 1L, 0L, 0L, 0L), tiny.map { it.total })
+        for (n in 1..40) {
+            assertEquals(61900L, Stats.allocations(converted(entry(61900, spread = n)).single()).sumOf { it.total })
+        }
+    }
+
+    @Test fun unspreadAndUnconvertedExpenses() {
+        assertEquals(listOf(100L to 700L), Stats.allocations(converted(entry(700)).single()).map { it.date to it.total })
+        assertTrue(Stats.allocations(converted(entry(700, "JPY", spread = 3)).single()).isEmpty())
+    }
+
+    @Test fun perDayFiguresUseTheSpread() {
+        val list = converted(entry(900, date = 10, spread = 3), entry(100, date = 11))
+        assertEquals(listOf(300L, 400L, 300L, 0L), Stats.perDay(list, 10, 13).map { it.total })
+        assertEquals(400L, Stats.dayTotal(list, 11))
+        assertEquals(0L, Stats.dayTotal(list, 9))
+        // Days outside the charted range are simply not shown; the total is unaffected.
+        assertEquals(listOf(400L), Stats.perDay(list, 11, 11).map { it.total })
+        assertEquals(1000L, Stats.total(list))
+    }
+
+    @Test fun cumulativeIsARunningTotal() {
+        val days = Stats.perDay(converted(entry(100, date = 1), entry(250, date = 3), entry(-50, date = 4)), 1, 4)
+        assertEquals(listOf(100L, 100L, 350L, 300L), Stats.cumulative(days).map { it.total })
+        assertTrue(Stats.cumulative(emptyList()).isEmpty())
+    }
+
+    @Test fun expensesCanBeLeftOutOfTheDailyAverage() {
+        // A 600.00 flight plus 40.00 of everyday spending over 4 days.
+        val summary = Stats.summary(converted(entry(60000, excluded = true), entry(4000)), 4)
+        assertEquals(64000L, summary.total)
+        assertEquals(60000L, summary.excludedFromAverage)
+        assertEquals(1000L, summary.dailyAverage)
+    }
+
+    // ---- budget ----
+
+    @Test fun aWholeTripBudgetIsDividedIntoADailyOne() {
+        val status = Stats.budget(budgetMinor = 140000, perDay = false, tripDays = 14, spent = 50000, spentToday = 2500)!!
+        assertEquals(140000L, status.tripBudget)
+        assertEquals(10000L, status.dailyBudget)
+        assertEquals(90000L, status.leftForTrip)
+        assertEquals(7500L, status.leftToday)
+    }
+
+    @Test fun aDailyBudgetIsMultipliedIntoATripOne() {
+        val status = Stats.budget(budgetMinor = 8000, perDay = true, tripDays = 10, spent = 90000, spentToday = 9500)!!
+        assertEquals(80000L, status.tripBudget)
+        assertEquals(8000L, status.dailyBudget)
+        assertEquals("overspent shows as a negative amount", -10000L, status.leftForTrip)
+        assertEquals(-1500L, status.leftToday)
+    }
+
+    @Test fun budgetEdgeCases() {
+        assertEquals(null, Stats.budget(0, false, 10, 500, 0))
+        assertEquals(null, Stats.budget(-5, true, 10, 500, 0))
+        // 100.00 over 3 days is 33.33 a day; a zero-length trip counts as one day.
+        assertEquals(3333L, Stats.budget(10000, false, 3, 0, 0)!!.dailyBudget)
+        assertEquals(10000L, Stats.budget(10000, false, 0, 0, 0)!!.dailyBudget)
+    }
+
     // ---- search ----
 
     @Test fun searchMatchesTitleNoteAndCategoryIgnoringCase() {
@@ -196,6 +315,8 @@ class StatsTest {
         assertTrue(SearchFilter(minMinor = 900, maxMinor = 1100).matches(thb, ""))
         val noRate = converted(entry(5000, "JPY")).single()
         assertTrue("falls back to the original amount", SearchFilter(minMinor = 5000, maxMinor = 5000).matches(noRate, ""))
+        val shared = converted(entry(6000, share = 2000)).single()
+        assertTrue("a shared bill is matched by my share", SearchFilter(minMinor = 2000, maxMinor = 2000).matches(shared, ""))
     }
 
     @Test fun emptyFilterIsRecognised() {
@@ -224,5 +345,31 @@ class StatsTest {
         assertEquals("7.3.2026", DateStyle.DMY_DOT.format(day, Locale.UK))
         assertEquals("7 March 2026", DateStyle.LONG.format(day, Locale.UK))
         assertEquals(LocalDate.of(2026, 3, 1).toEpochDay(), Dates.startOfMonth(day))
+    }
+
+    @Test fun datesAreAlwaysInEnglish() {
+        val saved = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale("fi", "FI"))
+            val day = LocalDate.of(2026, 10, 14).toEpochDay()
+            assertEquals("Wed, 14 Oct 2026", DateStyle.WEEKDAY_MEDIUM.format(day))
+            assertEquals("14 October 2026", DateStyle.LONG.format(day))
+            assertEquals("14 Oct", Dates.short(day, today = day))
+        } finally {
+            Locale.setDefault(saved)
+        }
+    }
+
+    @Test fun shortDatesShowTheYearOnlyWhenItDiffers() {
+        val today = LocalDate.of(2026, 10, 14).toEpochDay()
+        assertEquals("5 Oct", Dates.short(LocalDate.of(2026, 10, 5).toEpochDay(), today))
+        assertEquals("25 May 2025", Dates.short(LocalDate.of(2025, 5, 25).toEpochDay(), today))
+    }
+
+    @Test fun firstDayOfWeekFollowsTheRegion() {
+        assertEquals(DayOfWeek.SUNDAY, Dates.firstDayFor(Locale.US))
+        assertEquals(DayOfWeek.MONDAY, Dates.firstDayFor(Locale.UK))
+        assertEquals(DayOfWeek.MONDAY, Dates.firstDayFor(Locale("fi", "FI")))
+        assertEquals(DayOfWeek.SATURDAY, Dates.firstDayFor(Locale("ar", "EG")))
     }
 }

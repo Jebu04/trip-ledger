@@ -104,7 +104,19 @@ interface EntryDao {
 
     @Query("SELECT currency FROM entries WHERE tripId = :tripId ORDER BY createdAt DESC, id DESC LIMIT 1")
     suspend fun lastCurrency(tripId: Long): String?
+
+    @Query("SELECT * FROM entries WHERE tripId = :tripId ORDER BY id")
+    suspend fun getForTrip(tripId: Long): List<Entry>
+
+    @Query("SELECT categoryId, COUNT(*) AS uses FROM entries GROUP BY categoryId")
+    suspend fun categoryUsage(): List<CategoryUse>
+
+    @Query("SELECT photo FROM entries WHERE photo != ''")
+    suspend fun photos(): List<String>
 }
+
+/** How many expenses use a category; drives the "most used first" order of the quick picker. */
+data class CategoryUse(val categoryId: Long, val uses: Int)
 
 @Dao
 interface CategoryDao {

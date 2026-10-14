@@ -14,6 +14,18 @@ enum class NumberStyle(val key: String, val group: String, val dec: Char, val sa
 
     companion object {
         fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: COMMA_DOT
+
+        /** The style a locale writes numbers in, used as the default on first launch. */
+        fun forLocale(locale: java.util.Locale): NumberStyle {
+            val symbols = java.text.DecimalFormatSymbols.getInstance(locale)
+            val group = symbols.groupingSeparator
+            return when {
+                symbols.decimalSeparator == ',' && group == '.' -> DOT_COMMA
+                symbols.decimalSeparator == ',' -> SPACE_COMMA
+                group == '\'' || group == '’' -> APOS_DOT
+                else -> COMMA_DOT
+            }
+        }
     }
 }
 
@@ -134,6 +146,8 @@ object Money {
         style: NumberStyle,
         display: CurrencyDisplay,
     ): String {
+        // A refund reads "-€5.00", with the sign in front of the symbol.
+        if (minor < 0) return "-" + format(-minor, code, symbol, decimals, style, display)
         val number = formatNumber(minor, decimals, style)
         val useSymbol = display == CurrencyDisplay.SYMBOL && symbol.isNotBlank()
         if (!useSymbol) return "$code $number"
@@ -158,8 +172,18 @@ class Converter(
     fun hasRate(code: String): Boolean = rateFor(code) != null
 
     /** Amount in home minor units, or null when there is no usable rate for [code]. */
-    fun toHome(amountMinor: Long, code: String): Long? {
+    fun toHome(amountMinor: Long, code: String): Long? = toHome(amountMinor, code, null)
+
+    /**
+     * Like [toHome], but [override] (a rate typed on one expense) wins over the trip's rate when it
+     * is a usable number.
+     */
+    fun toHome(amountMinor: Long, code: String, override: String?): Long? {
         if (code == homeCode) return amountMinor
-        return Money.convert(amountMinor, decimalsOf(code), decimalsOf(homeCode), rates[code])
+        return Money.convert(amountMinor, decimalsOf(code), decimalsOf(homeCode), effectiveRate(code, override))
     }
+
+    /** The rate that applies to an expense: its own if set, otherwise the trip's. */
+    fun effectiveRate(code: String, override: String?): BigDecimal? =
+        if (code == homeCode) BigDecimal.ONE else Money.parseRate(override) ?: rates[code]
 }

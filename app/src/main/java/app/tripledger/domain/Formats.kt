@@ -13,7 +13,8 @@ enum class DateStyle(val key: String, val pattern: String) {
     DMY_DOT("dmy_dot", "d.M.yyyy"),
     ISO("iso", "yyyy-MM-dd");
 
-    fun format(epochDay: Long, locale: Locale = Locale.getDefault()): String =
+    /** Month and weekday names are always English: the app has no translations. */
+    fun format(epochDay: Long, locale: Locale = Locale.ENGLISH): String =
         LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofPattern(pattern, locale))
 
     companion object {
@@ -48,4 +49,18 @@ object Dates {
 
     fun parseDayOfWeek(key: String?): DayOfWeek =
         runCatching { DayOfWeek.valueOf(key ?: "") }.getOrDefault(DayOfWeek.MONDAY)
+
+    /** The day a locale's week starts on, limited to the three choices the app offers. */
+    fun firstDayFor(locale: Locale): DayOfWeek =
+        when (val day = java.time.temporal.WeekFields.of(locale).firstDayOfWeek) {
+            DayOfWeek.SUNDAY, DayOfWeek.SATURDAY -> day
+            else -> DayOfWeek.MONDAY
+        }
+
+    /** A compact date for list rows: "14 Oct", with the year only when it is not [today]'s year. */
+    fun short(epochDay: Long, today: Long = today()): String {
+        val date = LocalDate.ofEpochDay(epochDay)
+        val pattern = if (date.year == LocalDate.ofEpochDay(today).year) "d MMM" else "d MMM yyyy"
+        return date.format(DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH))
+    }
 }

@@ -5,11 +5,15 @@ object SampleData {
     private data class Row(
         val daysAgo: Int, val icon: String, val title: String, val amountMinor: Long, val currency: String,
         val method: Int = 0, val note: String = "",
+        /** Spread over this many days; 0 means "the whole trip". */
+        val spread: Int = 1,
+        /** My share of a shared bill, or null when it was all mine. */
+        val share: Long? = null,
     )
 
     // method: 0 = cash, 1 = credit card, 2 = debit card, -1 = none
     private val thailand = listOf(
-        Row(9, "flight", "Flight HEL–BKK", 61900, "EUR", 1, "Booked in August, one checked bag"),
+        Row(9, "flight", "Flight HEL–BKK", 61900, "EUR", 1, "Booked in August, one checked bag", spread = 0),
         Row(9, "bus", "Airport Rail Link", 4500, "THB"),
         Row(9, "hotel", "Riverside Hostel, 3 nights", 285000, "THB", 1),
         Row(9, "restaurant", "Pad thai at the night market", 8000, "THB"),
@@ -17,7 +21,7 @@ object SampleData {
         Row(8, "attractions", "Grand Palace ticket", 50000, "THB", 0, "Cover shoulders and knees"),
         Row(8, "bus", "Chao Phraya river boat", 3200, "THB"),
         Row(8, "restaurant", "Green curry and rice", 18000, "THB"),
-        Row(8, "bar", "Rooftop cocktails", 78000, "THB", 1),
+        Row(8, "bar", "Rooftop cocktails", 78000, "THB", 1, "Split the bill with Aino", share = 39000),
         Row(7, "grocery", "7-Eleven snacks and water", 12600, "THB"),
         Row(7, "attractions", "Wat Pho entrance", 30000, "THB"),
         Row(7, "restaurant", "Boat noodles", 6000, "THB"),
@@ -69,7 +73,7 @@ object SampleData {
         fun categoryId(icon: String): Long =
             (categories.firstOrNull { it.icon == icon } ?: categories.first()).id
 
-        fun entries(rows: List<Row>): List<Entry> = rows.mapIndexed { i, r ->
+        fun entries(rows: List<Row>, tripDays: Int): List<Entry> = rows.mapIndexed { i, r ->
             Entry(
                 tripId = 0,
                 amountMinor = r.amountMinor,
@@ -80,15 +84,20 @@ object SampleData {
                 note = r.note,
                 paymentMethodId = methods.getOrNull(r.method)?.id,
                 createdAt = (today - r.daysAgo) * 86_400_000L + i * 60_000L,
+                myShareMinor = r.share,
+                spreadDays = if (r.spread == 0) tripDays else r.spread,
             )
         }
 
-        val thai = Trip(name = "Thailand", startDate = today - 9, endDate = today + 4, homeCurrency = "EUR", createdAt = 2)
+        val thai = Trip(
+            name = "Thailand", startDate = today - 9, endDate = today + 4, homeCurrency = "EUR", createdAt = 2,
+            budgetMinor = 150000, // 1,500.00 EUR for the whole trip
+        )
         val thaiCurrencies = listOf(TripCurrency(0, "THB", "37.85", 0), TripCurrency(0, "USD", "1.08", 1))
         val lis = Trip(name = "Lisbon weekend", startDate = today - 142, endDate = today - 140, homeCurrency = "EUR", createdAt = 1)
         return Built(
             trips = listOf(thai to thaiCurrencies, lis to emptyList()),
-            entries = listOf(entries(thailand), entries(lisbon)),
+            entries = listOf(entries(thailand, 14), entries(lisbon, 3)),
         )
     }
 }

@@ -24,7 +24,7 @@ data class SearchFilter(
         if (categoryIds.isNotEmpty() && e.categoryId !in categoryIds) return false
         if (fromDate != null && e.date < fromDate) return false
         if (toDate != null && e.date > toDate) return false
-        val amount = item.homeMinor ?: e.amountMinor
+        val amount = item.homeMinor ?: e.effectiveMinor
         if (minMinor != null && amount < minMinor) return false
         if (maxMinor != null && amount > maxMinor) return false
         val tokens = query.trim().lowercase(Locale.ROOT).split(Regex("\\s+")).filter { it.isNotEmpty() }

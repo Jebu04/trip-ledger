@@ -25,10 +25,26 @@ object Keys {
     const val SHOW_AVERAGE = "card_average"
     const val SHOW_TODAY = "card_today"
     const val SHOW_COUNT = "card_count"
+    const val SHOW_BUDGET = "card_budget"
+    const val SHOW_LEFT_TODAY = "card_left_today"
     const val ACTIVE_TRIP = "active_trip"
+    const val AUTO_BACKUP_INTERVAL = "auto_backup_interval"
+    const val AUTO_BACKUP_FOLDER = "auto_backup_folder"
+    const val AUTO_BACKUP_LAST = "auto_backup_last"
+    const val AUTO_BACKUP_STATUS = "auto_backup_status"
 }
 
 const val DEFAULT_ACCENT: Int = 0xFF00897B.toInt()
+
+enum class BackupInterval(val key: String, val label: String, val days: Int) {
+    OFF("off", "Off", 0),
+    DAILY("daily", "Daily", 1),
+    WEEKLY("weekly", "Weekly", 7);
+
+    companion object {
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: OFF
+    }
+}
 
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -49,7 +65,17 @@ data class AppSettings(
     val showDailyAverage: Boolean = true,
     val showToday: Boolean = false,
     val showCount: Boolean = false,
+    /** Budget cards only ever appear on trips that have a budget. */
+    val showBudget: Boolean = true,
+    val showLeftToday: Boolean = true,
     val activeTripId: Long = 0,
+    val autoBackupInterval: BackupInterval = BackupInterval.OFF,
+    /** Tree URI of the folder chosen for automatic backups; empty = none chosen. */
+    val autoBackupFolder: String = "",
+    /** When the last automatic backup was written, in epoch milliseconds; 0 = never. */
+    val autoBackupLast: Long = 0,
+    /** Human-readable outcome of the last automatic backup attempt. */
+    val autoBackupStatus: String = "",
 ) {
     companion object {
         fun fromMap(m: Map<String, String>): AppSettings {
@@ -70,7 +96,13 @@ data class AppSettings(
                 showDailyAverage = bool(Keys.SHOW_AVERAGE, d.showDailyAverage),
                 showToday = bool(Keys.SHOW_TODAY, d.showToday),
                 showCount = bool(Keys.SHOW_COUNT, d.showCount),
+                showBudget = bool(Keys.SHOW_BUDGET, d.showBudget),
+                showLeftToday = bool(Keys.SHOW_LEFT_TODAY, d.showLeftToday),
                 activeTripId = m[Keys.ACTIVE_TRIP]?.toLongOrNull() ?: 0,
+                autoBackupInterval = BackupInterval.fromKey(m[Keys.AUTO_BACKUP_INTERVAL]),
+                autoBackupFolder = m[Keys.AUTO_BACKUP_FOLDER] ?: "",
+                autoBackupLast = m[Keys.AUTO_BACKUP_LAST]?.toLongOrNull() ?: 0,
+                autoBackupStatus = m[Keys.AUTO_BACKUP_STATUS] ?: "",
             )
         }
     }
@@ -108,4 +140,7 @@ data class RefData(
     }
 
     fun date(epochDay: Long): String = settings.dateStyle.format(epochDay)
+
+    /** How long a trip is, in days, counting both the first and the last. */
+    fun tripDays(trip: Trip): Int = (trip.endDate - trip.startDate + 1).coerceAtLeast(1).toInt()
 }

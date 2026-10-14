@@ -120,6 +120,22 @@ class MoneyTest {
         assertEquals("XTS 1.00", Money.format(100, "XTS", "", 2, NumberStyle.COMMA_DOT, CurrencyDisplay.SYMBOL))
     }
 
+    @Test fun refundsPutTheMinusBeforeTheSymbol() {
+        assertEquals("-€12.50", Money.format(-1250, "EUR", "€", 2, NumberStyle.COMMA_DOT, CurrencyDisplay.SYMBOL))
+        assertEquals("-kr\u00A0120,00", Money.format(-12000, "SEK", "kr", 2, NumberStyle.DOT_COMMA, CurrencyDisplay.SYMBOL))
+        assertEquals("-EUR\u00A012.50", Money.format(-1250, "EUR", "€", 2, NumberStyle.COMMA_DOT, CurrencyDisplay.CODE))
+        assertEquals("-12.50", Money.toPlain(-1250, 2))
+    }
+
+    @Test fun numberStyleFollowsTheRegion() {
+        assertEquals(NumberStyle.COMMA_DOT, NumberStyle.forLocale(java.util.Locale.US))
+        assertEquals(NumberStyle.COMMA_DOT, NumberStyle.forLocale(java.util.Locale.UK))
+        assertEquals(NumberStyle.DOT_COMMA, NumberStyle.forLocale(java.util.Locale.GERMANY))
+        assertEquals(NumberStyle.SPACE_COMMA, NumberStyle.forLocale(java.util.Locale("fi", "FI")))
+        assertEquals(NumberStyle.SPACE_COMMA, NumberStyle.forLocale(java.util.Locale.FRANCE))
+        assertEquals(NumberStyle.APOS_DOT, NumberStyle.forLocale(java.util.Locale("de", "CH")))
+    }
+
     // ---- exchange rates and conversion ----
 
     @Test fun parsesRates() {
@@ -181,5 +197,22 @@ class MoneyTest {
         assertTrue(converter.hasRate("THB"))
         assertFalse(converter.hasRate("JPY"))
         assertEquals(BigDecimal.ONE, converter.rateFor("EUR"))
+    }
+
+    @Test fun anExpenseCanCarryItsOwnRate() {
+        val converter = Converter("EUR", mapOf("THB" to BigDecimal("40"), "JPY" to null)) { if (it == "JPY") 0 else 2 }
+        // 400.00 THB: 10.00 at the trip's rate of 40, 12.50 at this expense's rate of 32.
+        assertEquals(1000L, converter.toHome(40000, "THB", ""))
+        assertEquals(1250L, converter.toHome(40000, "THB", "32"))
+        assertEquals(BigDecimal("32"), converter.effectiveRate("THB", "32"))
+        // An unusable override falls back to the trip's rate.
+        assertEquals(1000L, converter.toHome(40000, "THB", "0"))
+        assertEquals(1000L, converter.toHome(40000, "THB", "abc"))
+        // An override rescues a currency the trip has no rate for.
+        assertNull(converter.toHome(1600, "JPY", ""))
+        assertEquals(1000L, converter.toHome(1600, "JPY", "160"))
+        // The home currency never converts, whatever is typed.
+        assertEquals(500L, converter.toHome(500, "EUR", "3"))
+        assertEquals(BigDecimal.ONE, converter.effectiveRate("EUR", "3"))
     }
 }
