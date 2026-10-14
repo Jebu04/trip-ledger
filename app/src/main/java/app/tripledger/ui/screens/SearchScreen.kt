@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -34,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -130,7 +131,12 @@ fun SearchScreen(onOpenEntry: (Long) -> Unit) {
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp).testTag("result_count"),
         )
 
+        // The filter panel is the first list item; without this the list stays anchored on the
+        // first result and the panel opens scrolled half out of view.
+        val listState = rememberLazyListState()
+        LaunchedEffect(showFilters) { if (showFilters) listState.scrollToItem(0) }
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize().testTag("search_results"),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {

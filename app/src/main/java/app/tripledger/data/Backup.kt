@@ -119,7 +119,8 @@ object Backup {
             if (categories.isEmpty()) throw BackupException("The backup contains no categories.")
             return BackupData(settings, currencies, categories, methods, trips, tripCurrencies, entries)
         } catch (e: JSONException) {
-            throw BackupException("The backup file is damaged or incomplete (${e.message}).")
+            // The parser's own message quotes the file contents, which is no use to the user.
+            throw BackupException("The backup file is damaged or incomplete.")
         }
     }
 
