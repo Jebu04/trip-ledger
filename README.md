@@ -37,7 +37,7 @@ for the judgement calls, and [screenshots/](screenshots/) for the screens.
 
 ## The release build
 
-- Built with `.gradlew.bat :app:assembleRelease`; the APK lands in `app/build/outputs/apk/release/`.
+- Built with `.\gradlew.bat :app:assembleRelease`; the APK lands in `app/build/outputs/apk/release/`.
 elease\`.
 - Code shrinking (R8) and resource shrinking are on, which takes the APK from 31 MB to 1.8 MB.
 - Release builds start with no trips and do not offer the sample trips. The built-in categories,
