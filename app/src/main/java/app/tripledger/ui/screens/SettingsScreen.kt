@@ -66,6 +66,7 @@ import app.tripledger.ui.SettingsViewModel
 import app.tripledger.ui.appViewModel
 import app.tripledger.ui.components.ChoiceDialog
 import app.tripledger.ui.components.ConfirmDialog
+import app.tripledger.ui.components.exposeTestTags
 import app.tripledger.ui.components.CurrencyPickerDialog
 import app.tripledger.ui.components.Panel
 import app.tripledger.ui.components.SectionTitle
@@ -417,6 +418,7 @@ private fun SwitchRow(title: String, checked: Boolean, tag: String, onChange: (B
 private fun AccentDialog(selected: Int, onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.exposeTestTags(),
         title = { Text("Accent colour") },
         text = {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

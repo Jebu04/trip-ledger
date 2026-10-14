@@ -110,12 +110,25 @@ fun SearchScreen(onOpenEntry: (Long) -> Unit) {
             )
             FilterChip(
                 selected = showFilters || criteria.filterCount > 0,
-                onClick = { showFilters = !showFilters },
+                onClick = {
+                    // Get the keyboard out of the way so the filters are actually visible.
+                    focusManager.clearFocus()
+                    showFilters = !showFilters
+                },
                 label = { Text(if (criteria.filterCount > 0) "Filters (${criteria.filterCount})" else "Filters") },
                 leadingIcon = { Icon(Icons.Rounded.Tune, null, Modifier.size(18.dp)) },
                 modifier = Modifier.testTag("filters_toggle"),
             )
         }
+
+        // Kept outside the list so the count stays visible while filters are being adjusted.
+        val n = ui.results.size
+        Text(
+            "$n ${if (n == 1) "result" else "results"}" + (ui.totalText?.takeIf { n > 0 }?.let { " · $it" } ?: ""),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp).testTag("result_count"),
+        )
 
         LazyColumn(
             modifier = Modifier.fillMaxSize().testTag("search_results"),
@@ -125,15 +138,6 @@ fun SearchScreen(onOpenEntry: (Long) -> Unit) {
                 item(key = "filters") {
                     FilterPanel(ui, ref, vm, onPickFrom = { picking = 1 }, onPickTo = { picking = 2 })
                 }
-            }
-            item(key = "count") {
-                val n = ui.results.size
-                Text(
-                    "$n ${if (n == 1) "result" else "results"}" + (ui.totalText?.takeIf { n > 0 }?.let { " · $it" } ?: ""),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp).testTag("result_count"),
-                )
             }
             if (ui.results.isEmpty()) {
                 item(key = "empty") {

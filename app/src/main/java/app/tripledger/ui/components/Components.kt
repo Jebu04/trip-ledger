@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +67,12 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
+
+/**
+ * Dialogs live in their own window, so the test-tag-as-resource-id switch set on the app root
+ * does not reach them. Applying this to a dialog makes its tags visible to uiautomator as well.
+ */
+fun Modifier.exposeTestTags(): Modifier = semantics { testTagsAsResourceId = true }
 
 /** The round coloured icon that identifies a category. */
 @Composable
@@ -226,6 +233,7 @@ fun ConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.exposeTestTags(),
         title = { Text(title) },
         text = { Text(text) },
         confirmButton = {
@@ -252,6 +260,7 @@ fun <T> ChoiceDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.exposeTestTags(),
         title = { Text(title) },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
@@ -288,6 +297,7 @@ fun CurrencyPickerDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.exposeTestTags(),
         title = { Text(title) },
         text = {
             Column {
@@ -351,6 +361,7 @@ fun AppDatePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.exposeTestTags(),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { monthIndex-- }, modifier = Modifier.testTag("month_prev")) {

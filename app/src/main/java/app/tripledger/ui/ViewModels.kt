@@ -337,7 +337,11 @@ class StatsViewModel(repo: Repository, private val handle: SavedStateHandle) : V
             StatsRange.LAST7 -> (today - 6) to today
             StatsRange.WEEK -> Dates.startOfWeek(today, ref.settings.firstDayOfWeek) to today
             StatsRange.MONTH -> Dates.startOfMonth(today) to today
-            StatsRange.CUSTOM -> (from ?: tripStart) to (to ?: maxOf(tripEnd, from ?: tripStart))
+            StatsRange.CUSTOM -> {
+                // An open end falls back to the trip's own bounds, without crossing the other end.
+                val f = from ?: minOf(tripStart, to ?: tripStart)
+                f to (to ?: maxOf(tripEnd, f))
+            }
         }
         if (end < start) start = end.also { end = start }
 

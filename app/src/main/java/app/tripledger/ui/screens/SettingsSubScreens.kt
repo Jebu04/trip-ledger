@@ -80,6 +80,7 @@ import app.tripledger.ui.appViewModel
 import app.tripledger.ui.components.CategoryBadge
 import app.tripledger.ui.components.CategoryIcons
 import app.tripledger.ui.components.ConfirmDialog
+import app.tripledger.ui.components.exposeTestTags
 import app.tripledger.ui.components.EmptyState
 import app.tripledger.ui.theme.CategoryColors
 
@@ -217,6 +218,7 @@ private fun CategoryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.exposeTestTags(),
         title = { Text(if (existing == null) "New category" else "Edit category") },
         text = {
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
@@ -302,6 +304,7 @@ private fun DeleteCategoryDialog(category: Category, others: List<Category>, vm:
 
     AlertDialog(
         onDismissRequest = onDone,
+        modifier = Modifier.exposeTestTags(),
         title = { Text("Delete \"${category.name}\"?") },
         text = {
             Column {
@@ -411,6 +414,7 @@ private fun NameDialog(title: String, initial: String, onSave: (String) -> Unit,
     var error by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.exposeTestTags(),
         title = { Text(title) },
         text = {
             OutlinedTextField(
@@ -523,6 +527,7 @@ private fun CurrencyDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.exposeTestTags(),
         title = { Text(if (existing == null) "New currency" else "Edit ${existing.code}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {

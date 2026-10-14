@@ -165,7 +165,7 @@ private fun TripCard(row: TripRow, ref: RefData, active: Boolean, onClick: () ->
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = onEdit, modifier = Modifier.testTag("edit_trip")) {
+            IconButton(onClick = onEdit, modifier = Modifier.testTag("edit_trip_${trip.name}")) {
                 Icon(Icons.Rounded.Edit, contentDescription = "Edit ${trip.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -211,7 +211,7 @@ fun TripEditScreen(onDone: () -> Unit, onCreated: () -> Unit) {
                             Icon(Icons.Rounded.DeleteOutline, contentDescription = "Delete trip")
                         }
                     }
-                    TextButton(onClick = save, modifier = Modifier.testTag("save_trip")) {
+                    TextButton(onClick = save, enabled = form.ready, modifier = Modifier.testTag("save_trip")) {
                         Text("Save", fontWeight = FontWeight.SemiBold)
                     }
                 },

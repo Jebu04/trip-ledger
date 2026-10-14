@@ -105,7 +105,7 @@ fun EntryEditScreen(onDone: () -> Unit) {
                             Icon(Icons.Rounded.DeleteOutline, contentDescription = "Delete expense")
                         }
                     }
-                    TextButton(onClick = save, modifier = Modifier.testTag("save_entry")) {
+                    TextButton(onClick = save, enabled = form.ready, modifier = Modifier.testTag("save_entry")) {
                         Text("Save", fontWeight = FontWeight.SemiBold)
                     }
                 },
@@ -277,7 +277,7 @@ fun FieldLabel(text: String) {
 @Composable
 private fun CategoryGrid(categories: List<Category>, selectedId: Long, onSelect: (Long) -> Unit) {
     Panel {
-        Column(Modifier.padding(vertical = 10.dp, horizontal = 6.dp)) {
+        Column(Modifier.padding(vertical = 6.dp, horizontal = 6.dp)) {
             categories.chunked(4).forEach { row ->
                 Row(Modifier.fillMaxWidth()) {
                     row.forEach { category ->
@@ -291,7 +291,7 @@ private fun CategoryGrid(categories: List<Category>, selectedId: Long, onSelect:
                                     contentDescription = "Category ${category.name}"
                                 }
                                 .testTag("category_${category.name}")
-                                .padding(vertical = 8.dp, horizontal = 2.dp),
+                                .padding(vertical = 5.dp, horizontal = 2.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Box(
@@ -299,18 +299,17 @@ private fun CategoryGrid(categories: List<Category>, selectedId: Long, onSelect:
                                     width = 2.5.dp,
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                                     shape = CircleShape,
-                                ).padding(5.dp),
-                            ) { CategoryBadge(category.icon, category.color, size = 44.dp) }
-                            Spacer(Modifier.height(4.dp))
+                                ).padding(4.dp),
+                            ) { CategoryBadge(category.icon, category.color, size = 42.dp) }
+                            Spacer(Modifier.height(2.dp))
                             Text(
                                 category.name,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
-                                maxLines = 2,
+                                maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                minLines = 2,
                             )
                         }
                     }

@@ -64,6 +64,8 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.10.2")
     implementation("androidx.room:room-runtime:2.8.5")
     ksp("androidx.room:room-compiler:2.8.5")
+    // Pinned so the app and its instrumented tests run on the same coroutines version.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     testImplementation("junit:junit:4.13.2")
     // org.json is part of Android; on the JVM the unit tests need a real implementation.
