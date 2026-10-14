@@ -11,14 +11,16 @@ permissions at all.
 - Settings for theme, accent, currencies, categories, payment methods, formats, defaults, summary cards
 - JSON backup and restore, CSV export, delete-all
 
-See [DECISIONS.md](DECISIONS.md) for the judgement calls, and [screenshots/](screenshots/) for every screen.
+See [STATUS.md](STATUS.md) for the current state, the real-phone test and improvement ideas,
+[DECISIONS.md](DECISIONS.md) for the judgement calls, and [screenshots/](screenshots/) for every screen.
 
 ## Current state of your machine
 
 - The emulator **`tripledger_api33`** (Pixel 6, Android 13 / API 33) is running as `emulator-5554`.
 - The debug APK is installed on it, the app is open, and two sample trips are loaded
   ("Thailand", 35 expenses in THB/USD/EUR, and "Lisbon weekend", 10 expenses).
-- Nothing was installed on the phone that was plugged in.
+- At your later request the debug APK was also installed on your OnePlus Nord CE, with the sample
+  trips loaded. See STATUS.md.
 
 ## Build and run
 
@@ -128,12 +130,12 @@ Please read this part.
 - **The CSV was never opened in Excel or Google Sheets.** I validated it with a CSV parser only.
 - **The reworded "backup file is damaged" message was not re-checked on screen** after I shortened
   it; `24_import_rejected.png` shows the old, longer wording. The rejection itself is tested.
-- **Tested on one device configuration only:** the Pixel 6 emulator, API 33, English locale,
-  default font size. Not tested on a real phone, a tablet, a small screen, large font sizes,
-  right-to-left languages, TalkBack, or any other Android version (minSdk is 26 but API 26–32 and
-  34+ are untested).
-- **Follow-system theme** was not tested by toggling the system dark mode; I tested the explicit
-  Light and Dark settings. It uses the standard Compose call.
+- **Tested on two devices only:** the Pixel 6 emulator (API 33, English) with the full test suite,
+  and by hand on a OnePlus Nord CE (Android 13, Finnish, system dark mode); STATUS.md lists what
+  the phone turned up. Not tested on a tablet, with large font sizes, right-to-left languages,
+  TalkBack, or any other Android version (minSdk is 26 but API 26–32 and 34+ are untested).
+- **The monochrome launcher icon** is compiled in but was not seen in a launcher with themed
+  icons switched on.
 - **Reordering** categories and payment methods is covered by database tests but I did not tap
   the arrows by hand. **Adding a custom currency** and **deleting a currency** were not exercised
   through the UI (the rules behind them are database-tested).
@@ -157,7 +159,7 @@ Please read this part.
   works, but it is cramped.
 - A statistics range longer than a year only charts its most recent 366 days (totals still cover it all).
 - Reordering is by arrow buttons, not drag-and-drop.
-- The debug APK is about 19 MB, mostly the bundled Material icon set, which only release-build
+- The debug APK is about 31 MB, mostly the bundled Material icon set, which only release-build
   shrinking would trim.
 - Two screenshots are slightly off: `31_currency_edit.png` shows "0.87British Pound" because my
   test script typed a rate into the name field (my mistake, not an app bug; the data was reset
