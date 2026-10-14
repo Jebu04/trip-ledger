@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Single-colour suitcase glyph for Android 13 themed icons. The launcher replaces the colour
+  with one from the wallpaper palette, so only the shape matters here.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.2"
+        android:scaleY="0.2"
+        android:translateX="2.8"
+        android:translateY="2.8">
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M164,192H348a28,28 0 0 1 28,28V340a28,28 0 0 1 -28,28H164a28,28 0 0 1 -28,-28V220a28,28 0 0 1 28,-28Z"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="14"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M212,192V164a20,20 0 0 1 20,-20h48a20,20 0 0 1 20,20v28"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="14"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>
