@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.tripledger.BuildConfig
 import app.tripledger.data.Keys
 import app.tripledger.domain.CurrencyDisplay
 import app.tripledger.domain.DateStyle
@@ -250,8 +251,11 @@ fun SettingsScreen(onOpen: (String) -> Unit, onEditTrip: (Long) -> Unit) {
                 SettingRow("Import CSV", "Add expenses from a CSV exported by Trip Ledger", "setting_import_csv") {
                     importCsv.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/octet-stream"))
                 }
-                RowDivider()
-                SettingRow("Add sample trips", "Two demo trips to try the app with", "setting_sample") { dialog = "sample" }
+                // Demo data is a development aid; release builds start empty and don't offer it.
+                if (BuildConfig.DEBUG) {
+                    RowDivider()
+                    SettingRow("Add sample trips", "Two demo trips to try the app with", "setting_sample") { dialog = "sample" }
+                }
                 RowDivider()
                 SettingRow("Delete all data", "Trips, entries and settings", "setting_delete_all", danger = true) { dialog = "delete_all" }
             }

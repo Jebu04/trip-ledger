@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.tripledger.BuildConfig
 import app.tripledger.data.RefData
 import app.tripledger.data.Trip
 import app.tripledger.domain.ConvertedEntry
@@ -335,9 +336,12 @@ private fun Welcome(onCreateTrip: () -> Unit, onLoadSample: () -> Unit) {
             Button(onClick = onCreateTrip, modifier = Modifier.testTag("create_first_trip")) {
                 Text("Create your first trip")
             }
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onLoadSample, modifier = Modifier.testTag("load_sample")) {
-                Text("Or explore with sample trips")
+            // Demo data is a development aid; release builds start empty and don't offer it.
+            if (BuildConfig.DEBUG) {
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = onLoadSample, modifier = Modifier.testTag("load_sample")) {
+                    Text("Or explore with sample trips")
+                }
             }
         }
     }

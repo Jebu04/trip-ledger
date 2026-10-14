@@ -129,3 +129,13 @@ Things that were ambiguous or needed a judgement call, and what I picked.
   confirmation dialogs.
 - **A duplicate** is dated today and does not copy the receipt photo.
 - **Wide screens** (landscape, tablets) get a side navigation rail and content capped at 720 dp wide.
+
+## Release build
+
+- **"Empty from the presets"** (your answer): release builds start with no trips and hide the
+  sample-trips options; the default categories, payment methods and currency list stay, so the
+  app is usable straight away. Debug builds still offer sample trips for testing.
+- **Signing key** generated for this app (RSA 4096, valid about 27 years), stored in `release/`
+  outside git together with a random password. Losing it means future updates can't be installed
+  over the existing app.
+- **Code and resource shrinking on**, with line numbers kept in stack traces.

@@ -7,3 +7,6 @@ local.properties
 captures/
 .DS_Store
 tools/tmp/
+
+# Release signing key and its passwords: never commit these.
+release/

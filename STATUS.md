@@ -58,9 +58,12 @@ build just before the last few layout tweaks.
 
 ## Not done, not verified, or imperfect
 
-**Waiting for you**
+**Release**
 
-- **Release build** (signing, code shrinking). Say when the app is ready for it.
+- Version 1.0 is built, signed and installed on your phone, starting empty. See "The release
+  build" in the README, and **back up the signing key in `release/`**: without it you cannot
+  update the app on your phone without wiping its data.
+- The release build was checked by hand on the emulator; the automated tests run on the debug build.
 
 **Not verified**
 

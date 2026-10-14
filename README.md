@@ -31,9 +31,29 @@ for the judgement calls, and [screenshots/](screenshots/) for the screens.
   with the two sample trips loaded ("Thailand", 35 expenses with a €1,500 budget, a shared bill and
   a flight spread over the trip; "Lisbon weekend", 10 expenses). An "Add expense" widget is on its
   home screen.
-- Your **OnePlus Nord CE** has the current debug build too. It was installed over the previous
-  version, so the data that was on it is still there.
-- No release build has been made; that waits until you say the app is ready.
+- Your **OnePlus Nord CE** has the **release build** (version 1.0). The development build and its
+  sample data were removed first, so the app starts empty.
+- The release APK is kept at `release/TripLedger-1.0-release.apk` (1.8 MB).
+
+## The release build
+
+- Built with `.\gradlew.bat :app:assembleRelease`; the APK lands in `appuild\outputspkelease\`.
+- Code shrinking (R8) and resource shrinking are on, which takes the APK from 31 MB to 1.8 MB.
+- Release builds start with no trips and do not offer the sample trips. The built-in categories,
+  payment methods (Cash, Credit card, Debit card) and the currency list (no rates) are kept.
+- It is signed with a key generated for this app: `release/tripledger-release.jks`, with its
+  passwords in `release/keystore.properties`. **Both are deliberately left out of git. Back them
+  up somewhere safe** (a password manager or an encrypted drive). Android only installs an update
+  over the phone's copy if it is signed with this same key; without it, a future version can only
+  be installed by uninstalling, which deletes the app's data. Certificate SHA-256:
+  `b9cd50f0fc016136ce0182be34171bbcaeb32dbbce31e96f631ef8a4515db316`.
+- For a future version, raise `versionCode` (and `versionName`) in `app/build.gradle.kts` before
+  building, then install over the old one with `adb install -r`.
+- Before release, the full test suite was run once more on the debug build (82 unit + 68
+  instrumented, all passing), and the release APK itself was walked through on the emulator:
+  first launch, creating a trip with a currency and budget, adding an expense, statistics,
+  search, backup export and merge import, CSV export and import, a camera receipt, delete with
+  undo, and the "Add expense" shortcut. No crashes. Screenshots in `screenshots/release/`.
 
 ## Build and run
 
@@ -121,7 +141,7 @@ Please read this part; STATUS.md has the full list.
   If a folder becomes unavailable (an SD card removed, say) the status line says the backup failed.
 - Not tested on a tablet, with TalkBack, with right-to-left text, or on Android versions other
   than 13.
-- Only the debug build exists (about 31 MB, mostly the bundled icon set).
+- The automated tests run against the debug build; the shrunk release build was checked by hand only.
 
 ## Project layout
 
