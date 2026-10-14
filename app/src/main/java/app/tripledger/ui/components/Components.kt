@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +68,17 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import app.tripledger.TripLedgerApp
 
 /**
  * Dialogs live in their own window, so the test-tag-as-resource-id switch set on the app root
@@ -103,9 +115,17 @@ fun Panel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
 }
 
 @Composable
-fun SummaryCard(label: String, value: String, modifier: Modifier = Modifier, emphasized: Boolean = false) {
-    val container = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer
-    val content = if (emphasized) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+fun SummaryCard(label: String, value: String, modifier: Modifier = Modifier, emphasized: Boolean = false, warning: Boolean = false) {
+    val container = when {
+        warning -> MaterialTheme.colorScheme.errorContainer
+        emphasized -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.surfaceContainer
+    }
+    val content = when {
+        warning -> MaterialTheme.colorScheme.onErrorContainer
+        emphasized -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     Surface(modifier = modifier, shape = MaterialTheme.shapes.medium, color = container, contentColor = content) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Text(
@@ -116,12 +136,13 @@ fun SummaryCard(label: String, value: String, modifier: Modifier = Modifier, emp
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(4.dp))
+            // Shrinks to fit rather than cutting digits off on narrow screens or with large text.
             Text(
                 value,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = 22.sp, stepSize = 1.sp),
             )
         }
     }
@@ -139,6 +160,7 @@ fun EntryRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     amountMissing: Boolean = false,
+    refund: Boolean = false,
 ) {
     Row(
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
@@ -162,7 +184,11 @@ fun EntryRow(
                 amount,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = if (amountMissing) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                color = when {
+                    amountMissing -> MaterialTheme.colorScheme.error
+                    refund -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurface
+                },
                 maxLines = 1,
             )
             if (originalAmount != null) {
@@ -216,7 +242,7 @@ fun EmptyState(
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
-        modifier = modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
+        modifier = modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp).semantics { heading() },
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
     )
@@ -357,7 +383,8 @@ fun AppDatePickerDialog(
     var selected by rememberSaveable { mutableLongStateOf(initial) }
     val first = LocalDate.of(monthIndex / 12, monthIndex % 12 + 1, 1)
     val today = Dates.today()
-    val locale = Locale.getDefault()
+    // Month and weekday names are English, like the rest of the app.
+    val locale = Locale.ENGLISH
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -444,4 +471,71 @@ fun AppDatePickerDialog(
             }
         },
     )
+}
+
+/** Asks before throwing away a form the user has typed into. */
+@Composable
+fun DiscardDialog(what: String, onDiscard: () -> Unit, onKeepEditing: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onKeepEditing,
+        modifier = Modifier.exposeTestTags(),
+        title = { Text("Discard $what?") },
+        text = { Text("Your changes haven't been saved.") },
+        confirmButton = {
+            TextButton(
+                onClick = onDiscard,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.testTag("discard_button"),
+            ) { Text("Discard") }
+        },
+        dismissButton = { TextButton(onClick = onKeepEditing, modifier = Modifier.testTag("keep_editing")) { Text("Keep editing") } },
+    )
+}
+
+/** Loads a stored receipt photo off the main thread. Null while loading or if the file is gone. */
+@Composable
+fun rememberReceipt(name: String, maxSize: Int): ImageBitmap? {
+    val receipts = (LocalContext.current.applicationContext as TripLedgerApp).receipts
+    val state = produceState<ImageBitmap?>(null, name, maxSize) {
+        value = if (name.isBlank()) null else receipts.load(name, maxSize)?.asImageBitmap()
+    }
+    return state.value
+}
+
+@Composable
+fun ReceiptThumbnail(name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val image = rememberReceipt(name, 400)
+    Box(
+        modifier
+            .size(88.dp)
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .clickable(onClickLabel = "Open receipt photo", onClick = onClick)
+            .testTag("receipt_thumbnail"),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (image != null) {
+            Image(image, contentDescription = "Receipt photo", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        } else {
+            Text("Photo missing", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+/** Shows a receipt photo on a dark background, as large as the screen allows. Tap to close. */
+@Composable
+fun ReceiptViewer(name: String, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val image = rememberReceipt(name, 2000)
+        Box(
+            Modifier.fillMaxSize().background(Color.Black).clickable(onClickLabel = "Close", onClick = onDismiss).testTag("receipt_viewer"),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (image != null) {
+                Image(image, contentDescription = "Receipt photo", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            } else {
+                Text("The photo could not be loaded.", color = Color.White)
+            }
+        }
+    }
 }

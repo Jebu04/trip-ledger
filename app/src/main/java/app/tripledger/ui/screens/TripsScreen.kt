@@ -73,6 +73,9 @@ import app.tripledger.ui.TripsViewModel
 import app.tripledger.ui.appViewModel
 import app.tripledger.ui.components.AppDatePickerDialog
 import app.tripledger.ui.components.ConfirmDialog
+import app.tripledger.ui.components.DiscardDialog
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.FilterChip
 import app.tripledger.ui.components.CurrencyPickerDialog
 import app.tripledger.ui.components.EmptyState
 import app.tripledger.ui.components.Panel
@@ -164,6 +167,17 @@ private fun TripCard(row: TripRow, ref: RefData, active: Boolean, onClick: () ->
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                row.budget?.let { b ->
+                    val over = b.leftForTrip < 0
+                    Text(
+                        if (over) "${ref.money(-b.leftForTrip, trip.homeCurrency)} over the ${ref.money(b.tripBudget, trip.homeCurrency)} budget"
+                        else "${ref.money(b.leftForTrip, trip.homeCurrency)} left of ${ref.money(b.tripBudget, trip.homeCurrency)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             IconButton(onClick = onEdit, modifier = Modifier.testTag("edit_trip_${trip.name}")) {
                 Icon(Icons.Rounded.Edit, contentDescription = "Edit ${trip.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -185,8 +199,11 @@ fun TripEditScreen(onDone: () -> Unit, onCreated: () -> Unit) {
     var pickingHome by rememberSaveable { mutableStateOf(false) }
     var pickingLocal by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var confirmDiscard by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    BackHandler(enabled = ui.dirty) { confirmDiscard = true }
+    val close = { if (ui.dirty) confirmDiscard = true else onDone() }
 
     val save = {
         focusManager.clearFocus()
@@ -201,7 +218,7 @@ fun TripEditScreen(onDone: () -> Unit, onCreated: () -> Unit) {
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                 title = { Text(if (ui.isEdit) "Edit trip" else "New trip") },
                 navigationIcon = {
-                    IconButton(onClick = onDone, modifier = Modifier.testTag("close_trip")) {
+                    IconButton(onClick = close, modifier = Modifier.testTag("close_trip")) {
                         Icon(Icons.Rounded.Close, contentDescription = "Close")
                     }
                 },
@@ -257,6 +274,38 @@ fun TripEditScreen(onDone: () -> Unit, onCreated: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp),
             )
+
+            FieldLabel("Budget (optional)")
+            Panel(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    OutlinedTextField(
+                        value = vm.budgetText,
+                        onValueChange = vm::setBudget,
+                        modifier = Modifier.fillMaxWidth().testTag("budget_field"),
+                        label = { Text(if (form.budgetPerDay) "Budget per day" else "Budget for the whole trip") },
+                        placeholder = { Text("No budget") },
+                        suffix = { Text(home.code) },
+                        singleLine = true,
+                        isError = ui.budgetError != null,
+                        supportingText = { Text(ui.budgetError ?: "Shown as \"Budget left\" and \"Left today\" on the entries screen.") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = !form.budgetPerDay,
+                            onClick = { vm.setBudgetPerDay(false) },
+                            label = { Text("Whole trip") },
+                            modifier = Modifier.testTag("budget_whole_trip"),
+                        )
+                        FilterChip(
+                            selected = form.budgetPerDay,
+                            onClick = { vm.setBudgetPerDay(true) },
+                            label = { Text("Per day") },
+                            modifier = Modifier.testTag("budget_per_day"),
+                        )
+                    }
+                }
+            }
 
             FieldLabel("Local currencies and exchange rates")
             Panel(Modifier.fillMaxWidth()) {
@@ -327,6 +376,16 @@ fun TripEditScreen(onDone: () -> Unit, onCreated: () -> Unit) {
                 onDismiss = { pickingLocal = false },
             )
         }
+    }
+    if (confirmDiscard) {
+        DiscardDialog(
+            what = if (ui.isEdit) "your changes" else "this trip",
+            onDiscard = {
+                confirmDiscard = false
+                onDone()
+            },
+            onKeepEditing = { confirmDiscard = false },
+        )
     }
     if (confirmDelete) {
         ConfirmDialog(

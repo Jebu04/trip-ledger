@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Trip Ledger</string>
+    <string name="shortcut_add_short">Add expense</string>
+    <string name="shortcut_add_long">Add an expense</string>
+    <string name="widget_label">Add expense</string>
+    <string name="widget_description">Opens Trip Ledger straight into a new expense</string>
 </resources>

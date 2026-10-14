@@ -60,6 +60,9 @@ class AppFlowTest {
         runBlocking {
             repo.deleteAllData()
             repo.setSetting(Keys.HOME_CURRENCY, "EUR")
+            // Formats normally follow the phone's region; pin them so results don't depend on it.
+            repo.setSetting(Keys.NUMBER_STYLE, "comma_dot")
+            repo.setSetting(Keys.FIRST_DAY, "MONDAY")
         }
     }
 
@@ -347,8 +350,8 @@ class AppFlowTest {
         compose.onNode(inCard("stats_total", "€60.00")).assertIsDisplayed()
         compose.onNode(inCard("stats_average", "€60.00")).assertIsDisplayed()
         compose.onNodeWithTag("donut_chart").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("66.7%").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("33.3%").performScrollTo().assertIsDisplayed()
+        compose.onNode(hasText("66.7%") and hasAnyAncestor(hasTestTag("category_slice"))).performScrollTo().assertIsDisplayed()
+        compose.onNode(hasText("33.3%") and hasAnyAncestor(hasTestTag("category_slice"))).performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("day_chart").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Biggest expenses").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Hostel").performScrollTo().assertIsDisplayed()
@@ -416,25 +419,37 @@ class AppFlowTest {
         // Filters: category, then an amount range.
         compose.onNodeWithTag("search_field").performTextClearance()
         waitForText("3 results", substring = true)
-        tap("filters_toggle")
+        tap("chip_category")
         tap("filter_category_Transport")
         waitForText("1 result", substring = true)
+        tap("sheet_done")
+        waitGone(hasTestTag("sheet_done"))
         compose.onNodeWithText("Taxi to airport").assertIsDisplayed()
+        compose.onNodeWithTag("chip_category").assertTextContains("Transport")
+        tap("chip_category")
         tap("filter_category_Transport")
+        tap("sheet_done")
         waitForText("3 results", substring = true)
+
+        tap("chip_amount")
         compose.onNodeWithTag("amount_min").performTextInput("20")
         waitForText("2 results", substring = true)
         compose.onNodeWithTag("amount_max").performTextInput("30")
         waitForText("1 result", substring = true)
+        tap("sheet_done")
+        waitGone(hasTestTag("sheet_done"))
+        compose.onNodeWithTag("chip_amount").assertTextContains("20 – 30")
         tap("clear_filters")
         waitForText("3 results", substring = true)
 
         // Date range: nothing is dated before the first of last month.
+        tap("chip_date")
         tap("search_to")
         tap("month_prev")
         tap("day_1")
         tap("date_ok")
         waitForText("No matches")
+        tap("sheet_done")
     }
 
     // ---- settings ----

@@ -67,6 +67,11 @@ import app.tripledger.ui.appViewModel
 import app.tripledger.ui.components.ChoiceDialog
 import app.tripledger.ui.components.ConfirmDialog
 import app.tripledger.ui.components.exposeTestTags
+import app.tripledger.data.BackupInterval
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
+import app.tripledger.ui.components.exposeTestTags
 import app.tripledger.ui.components.CurrencyPickerDialog
 import app.tripledger.ui.components.Panel
 import app.tripledger.ui.components.SectionTitle
@@ -98,6 +103,12 @@ fun SettingsScreen(onOpen: (String) -> Unit, onEditTrip: (Long) -> Unit) {
     val importBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) pendingImport = uri
     }
+    val importCsv = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.importCsv(context.contentResolver, uri)
+    }
+    val pickBackupFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) vm.setBackupFolder(context, uri)
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -111,7 +122,7 @@ fun SettingsScreen(onOpen: (String) -> Unit, onEditTrip: (Long) -> Unit) {
     ) { padding ->
         if (ref == null) return@Scaffold
         val s = ref.settings
-        val locale = Locale.getDefault()
+        val locale = Locale.ENGLISH
         val sampleDay = LocalDate.now().toEpochDay()
         Column(
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)
@@ -192,6 +203,10 @@ fun SettingsScreen(onOpen: (String) -> Unit, onEditTrip: (Long) -> Unit) {
                 SwitchRow("Today", s.showToday, "switch_today") { vm.set(Keys.SHOW_TODAY, it) }
                 RowDivider()
                 SwitchRow("Number of entries", s.showCount, "switch_count") { vm.set(Keys.SHOW_COUNT, it) }
+                RowDivider()
+                SwitchRow("Budget left (trips with a budget)", s.showBudget, "switch_budget") { vm.set(Keys.SHOW_BUDGET, it) }
+                RowDivider()
+                SwitchRow("Left today (trips with a budget)", s.showLeftToday, "switch_left_today") { vm.set(Keys.SHOW_LEFT_TODAY, it) }
             }
 
             SectionTitle("Formats")
@@ -213,12 +228,27 @@ fun SettingsScreen(onOpen: (String) -> Unit, onEditTrip: (Long) -> Unit) {
                     exportBackup.launch("tripledger-backup-${LocalDate.now()}.json")
                 }
                 RowDivider()
-                SettingRow("Import backup", "Replace all data with a backup file", "setting_import") {
+                SettingRow("Import backup", "Replace everything, or merge into what's here", "setting_import") {
                     importBackup.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
                 }
                 RowDivider()
+                SettingRow(
+                    "Automatic backup",
+                    when {
+                        s.autoBackupInterval == BackupInterval.OFF -> "Off"
+                        s.autoBackupFolder.isBlank() -> "${s.autoBackupInterval.label}, but no folder chosen"
+                        s.autoBackupStatus.isNotBlank() -> "${s.autoBackupInterval.label} · ${s.autoBackupStatus}"
+                        else -> "${s.autoBackupInterval.label} · no backup made yet"
+                    },
+                    "setting_auto_backup",
+                ) { dialog = "auto_backup" }
+                RowDivider()
                 SettingRow("Export CSV", "All entries as a spreadsheet file", "setting_csv") {
                     exportCsv.launch("tripledger-${LocalDate.now()}.csv")
+                }
+                RowDivider()
+                SettingRow("Import CSV", "Add expenses from a CSV exported by Trip Ledger", "setting_import_csv") {
+                    importCsv.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/octet-stream"))
                 }
                 RowDivider()
                 SettingRow("Add sample trips", "Two demo trips to try the app with", "setting_sample") { dialog = "sample" }
@@ -341,16 +371,90 @@ fun SettingsScreen(onOpen: (String) -> Unit, onEditTrip: (Long) -> Unit) {
     }
 
     pendingImport?.let { uri ->
-        ConfirmDialog(
-            "Restore this backup?",
-            "Everything currently in the app is replaced by the contents of the file. This can't be undone.",
-            "Restore",
-            destructive = true,
-            onConfirm = {
-                pendingImport = null
-                vm.importBackup(context.contentResolver, uri)
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            modifier = Modifier.exposeTestTags(),
+            title = { Text("Import this backup?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Merge adds the trips and expenses from the file to what is already here, skipping anything already present.")
+                    Text("Replace deletes everything currently in the app first. This can't be undone.")
+                }
             },
-            onDismiss = { pendingImport = null },
+            confirmButton = {
+                Row {
+                    TextButton(
+                        onClick = {
+                            pendingImport = null
+                            vm.importBackup(context.contentResolver, uri, merge = false)
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.testTag("import_replace"),
+                    ) { Text("Replace") }
+                    TextButton(
+                        onClick = {
+                            pendingImport = null
+                            vm.importBackup(context.contentResolver, uri, merge = true)
+                        },
+                        modifier = Modifier.testTag("import_merge"),
+                    ) { Text("Merge") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { pendingImport = null }) { Text("Cancel") } },
+        )
+    }
+
+    val settingsNow = ref?.settings
+    if (dialog == "auto_backup" && settingsNow != null) {
+        AlertDialog(
+            onDismissRequest = { dialog = "" },
+            modifier = Modifier.exposeTestTags(),
+            title = { Text("Automatic backup") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "A backup file is written to a folder you choose, at most once a day or a week. " +
+                            "It happens when you open or leave the app; there is no background service. The newest 10 files are kept.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        BackupInterval.entries.forEach { interval ->
+                            FilterChip(
+                                selected = settingsNow.autoBackupInterval == interval,
+                                onClick = { vm.set(Keys.AUTO_BACKUP_INTERVAL, interval.key) },
+                                label = { Text(interval.label) },
+                                modifier = Modifier.testTag("backup_${interval.key}"),
+                            )
+                        }
+                    }
+                    Text(
+                        if (settingsNow.autoBackupFolder.isBlank()) "No folder chosen"
+                        else "Folder: " + Uri.decode(settingsNow.autoBackupFolder.substringAfterLast("/")).substringAfter(":").ifBlank { "storage root" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (settingsNow.autoBackupStatus.isNotBlank()) {
+                        Text(
+                            settingsNow.autoBackupStatus,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (settingsNow.autoBackupStatus.startsWith("Backup failed")) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.testTag("backup_status"),
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { pickBackupFolder.launch(null) }, modifier = Modifier.testTag("backup_choose_folder")) {
+                            Text(if (settingsNow.autoBackupFolder.isBlank()) "Choose folder" else "Change folder")
+                        }
+                        OutlinedButton(
+                            onClick = { vm.backupNow(context) },
+                            enabled = settingsNow.autoBackupFolder.isNotBlank(),
+                            modifier = Modifier.testTag("backup_now"),
+                        ) { Text("Back up now") }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { dialog = "" }) { Text("Close") } },
         )
     }
 }

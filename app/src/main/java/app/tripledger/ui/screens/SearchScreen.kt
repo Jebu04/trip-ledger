@@ -1,5 +1,6 @@
 package app.tripledger.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -10,31 +11,36 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DateRange
+import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -44,19 +50,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.tripledger.data.RefData
-import app.tripledger.ui.SearchUi
+import app.tripledger.domain.Dates
+import app.tripledger.ui.SearchCriteria
 import app.tripledger.ui.SearchViewModel
 import app.tripledger.ui.appViewModel
 import app.tripledger.ui.components.AppDatePickerDialog
 import app.tripledger.ui.components.EmptyState
-import app.tripledger.ui.components.Panel
-import app.tripledger.domain.Dates
+import app.tripledger.ui.components.exposeTestTags
 
 @Composable
 fun SearchScreen(onOpenEntry: (Long) -> Unit) {
@@ -65,7 +74,8 @@ fun SearchScreen(onOpenEntry: (Long) -> Unit) {
     val ref = ui.ref
     val criteria = ui.criteria
     val focusManager = LocalFocusManager.current
-    var showFilters by rememberSaveable { mutableStateOf(false) }
+    // Which filter sheet is open: "category", "date", "amount" or "" for none.
+    var sheet by rememberSaveable { mutableStateOf("") }
     var picking by rememberSaveable { mutableStateOf(0) }
 
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
@@ -93,9 +103,16 @@ fun SearchScreen(onOpenEntry: (Long) -> Unit) {
         )
         if (ref == null || ui.loading) return@Column
 
-        FlowRow(
-            Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        fun open(which: String) {
+            focusManager.clearFocus()
+            sheet = which
+        }
+
+        // Scope and filters as one compact, scrollable row. Each filter opens its own small sheet.
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             FilterChip(
                 selected = !criteria.allTrips,
@@ -110,19 +127,31 @@ fun SearchScreen(onOpenEntry: (Long) -> Unit) {
                 modifier = Modifier.testTag("scope_all"),
             )
             FilterChip(
-                selected = showFilters || criteria.filterCount > 0,
-                onClick = {
-                    // Get the keyboard out of the way so the filters are actually visible.
-                    focusManager.clearFocus()
-                    showFilters = !showFilters
-                },
-                label = { Text(if (criteria.filterCount > 0) "Filters (${criteria.filterCount})" else "Filters") },
-                leadingIcon = { Icon(Icons.Rounded.Tune, null, Modifier.size(18.dp)) },
-                modifier = Modifier.testTag("filters_toggle"),
+                selected = criteria.categoryIds.isNotEmpty(),
+                onClick = { open("category") },
+                label = { Text(categoryLabel(criteria, ref), maxLines = 1) },
+                leadingIcon = { Icon(Icons.Rounded.Category, null, Modifier.size(18.dp)) },
+                modifier = Modifier.testTag("chip_category"),
             )
+            FilterChip(
+                selected = criteria.hasDate,
+                onClick = { open("date") },
+                label = { Text(dateLabel(criteria), maxLines = 1) },
+                leadingIcon = { Icon(Icons.Rounded.DateRange, null, Modifier.size(18.dp)) },
+                modifier = Modifier.testTag("chip_date"),
+            )
+            FilterChip(
+                selected = criteria.hasAmount,
+                onClick = { open("amount") },
+                label = { Text(amountLabel(criteria), maxLines = 1) },
+                leadingIcon = { Icon(Icons.Rounded.Payments, null, Modifier.size(18.dp)) },
+                modifier = Modifier.testTag("chip_amount"),
+            )
+            if (criteria.filterCount > 0) {
+                TextButton(onClick = vm::clearFilters, modifier = Modifier.testTag("clear_filters")) { Text("Clear") }
+            }
         }
 
-        // Kept outside the list so the count stays visible while filters are being adjusted.
         val n = ui.results.size
         Text(
             "$n ${if (n == 1) "result" else "results"}" + (ui.totalText?.takeIf { n > 0 }?.let { " · $it" } ?: ""),
@@ -131,20 +160,10 @@ fun SearchScreen(onOpenEntry: (Long) -> Unit) {
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp).testTag("result_count"),
         )
 
-        // The filter panel is the first list item; without this the list stays anchored on the
-        // first result and the panel opens scrolled half out of view.
-        val listState = rememberLazyListState()
-        LaunchedEffect(showFilters) { if (showFilters) listState.scrollToItem(0) }
         LazyColumn(
-            state = listState,
             modifier = Modifier.fillMaxSize().testTag("search_results"),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
-            if (showFilters) {
-                item(key = "filters") {
-                    FilterPanel(ui, ref, vm, onPickFrom = { picking = 1 }, onPickTo = { picking = 2 })
-                }
-            }
             if (ui.results.isEmpty()) {
                 item(key = "empty") {
                     if (!ui.anyEntries) {
@@ -160,20 +179,73 @@ fun SearchScreen(onOpenEntry: (Long) -> Unit) {
                     }
                 }
             } else {
-                item(key = "results") {
-                    Panel(Modifier.padding(horizontal = 16.dp)) {
-                        Column {
-                            ui.results.forEachIndexed { i, result ->
-                                if (i > 0) HorizontalDivider(Modifier.padding(start = 72.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                                EntryListItem(
-                                    result.item, ref, result.trip,
-                                    subtitleDate = true,
-                                    showTrip = criteria.allTrips,
-                                    onClick = { onOpenEntry(result.item.entry.id) },
-                                )
-                            }
-                        }
+                groupedItems(ui.results, keyPrefix = "r", key = { it.item.entry.id }) { result, shape ->
+                    EntryListItem(
+                        result.item, ref, result.trip,
+                        subtitleDate = true,
+                        showTrip = criteria.allTrips,
+                        shape = shape,
+                    ) { onOpenEntry(result.item.entry.id) }
+                }
+            }
+        }
+    }
+
+    if (ref != null && sheet.isNotEmpty()) {
+        FilterSheet(
+            title = when (sheet) {
+                "category" -> "Category"
+                "date" -> "Date"
+                else -> "Amount (in home currency)"
+            },
+            onClear = {
+                when (sheet) {
+                    "category" -> vm.clearCategories()
+                    "date" -> {
+                        vm.setFrom(null)
+                        vm.setTo(null)
                     }
+                    else -> {
+                        vm.setMin("")
+                        vm.setMax("")
+                    }
+                }
+            },
+            onDone = { sheet = "" },
+        ) {
+            when (sheet) {
+                "category" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ref.categories.forEach { category ->
+                        FilterChip(
+                            selected = category.id in criteria.categoryIds,
+                            onClick = { vm.toggleCategory(category.id) },
+                            label = { Text(category.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            modifier = Modifier.testTag("filter_category_${category.name}"),
+                        )
+                    }
+                }
+                "date" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DateFilterChip("From", criteria.from, ref, { picking = 1 }, { vm.setFrom(null) }, "search_from")
+                    DateFilterChip("To", criteria.to, ref, { picking = 2 }, { vm.setTo(null) }, "search_to")
+                }
+                else -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = vm.minText,
+                        onValueChange = vm::setMin,
+                        modifier = Modifier.weight(1f).testTag("amount_min"),
+                        label = { Text("Min") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
+                    )
+                    OutlinedTextField(
+                        value = vm.maxText,
+                        onValueChange = vm::setMax,
+                        modifier = Modifier.weight(1f).testTag("amount_max"),
+                        label = { Text("Max") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    )
                 }
             }
         }
@@ -192,52 +264,54 @@ fun SearchScreen(onOpenEntry: (Long) -> Unit) {
     }
 }
 
+private fun categoryLabel(c: SearchCriteria, ref: RefData): String = when (c.categoryIds.size) {
+    0 -> "Category"
+    1 -> ref.categoryMap[c.categoryIds.first()]?.name ?: "1 category"
+    else -> "${c.categoryIds.size} categories"
+}
+
+private fun dateLabel(c: SearchCriteria): String {
+    val from = c.from
+    val to = c.to
+    return when {
+        from != null && to != null -> "${Dates.short(from)} – ${Dates.short(to)}"
+        from != null -> "From ${Dates.short(from)}"
+        to != null -> "Until ${Dates.short(to)}"
+        else -> "Date"
+    }
+}
+
+private fun amountLabel(c: SearchCriteria): String = when {
+    c.minText.isNotBlank() && c.maxText.isNotBlank() -> "${c.minText} – ${c.maxText}"
+    c.minText.isNotBlank() -> "At least ${c.minText}"
+    c.maxText.isNotBlank() -> "Up to ${c.maxText}"
+    else -> "Amount"
+}
+
+/** A bottom sheet holding one filter. Results update live behind it as the filter changes. */
 @Composable
-private fun FilterPanel(ui: SearchUi, ref: RefData, vm: SearchViewModel, onPickFrom: () -> Unit, onPickTo: () -> Unit) {
-    val criteria = ui.criteria
-    Panel(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).testTag("filter_panel")) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            FieldLabel("Category")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ref.categories.forEach { category ->
-                    FilterChip(
-                        selected = category.id in criteria.categoryIds,
-                        onClick = { vm.toggleCategory(category.id) },
-                        label = { Text(category.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        modifier = Modifier.testTag("filter_category_${category.name}"),
-                    )
-                }
+private fun FilterSheet(title: String, onClear: () -> Unit, onDone: () -> Unit, content: @Composable () -> Unit) {
+    val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDone, sheetState = state, modifier = Modifier.exposeTestTags()) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
+                .navigationBarsPadding().imePadding(),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.semantics { heading() },
+            )
+            Spacer(Modifier.height(12.dp))
+            content()
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onClear, modifier = Modifier.testTag("sheet_clear")) { Text("Clear") }
+                Spacer(Modifier.size(8.dp))
+                Button(onClick = onDone, modifier = Modifier.testTag("sheet_done")) { Text("Done") }
             }
-            FieldLabel("Date")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DateFilterChip("From", criteria.from, ref, onPickFrom, { vm.setFrom(null) }, "search_from")
-                DateFilterChip("To", criteria.to, ref, onPickTo, { vm.setTo(null) }, "search_to")
-            }
-            FieldLabel("Amount (in home currency)")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = vm.minText,
-                    onValueChange = vm::setMin,
-                    modifier = Modifier.weight(1f).testTag("amount_min"),
-                    label = { Text("Min") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
-                )
-                OutlinedTextField(
-                    value = vm.maxText,
-                    onValueChange = vm::setMax,
-                    modifier = Modifier.weight(1f).testTag("amount_max"),
-                    label = { Text("Max") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                )
-            }
-            Spacer(Modifier.height(2.dp))
-            TextButton(
-                onClick = vm::clearFilters,
-                enabled = criteria.filterCount > 0,
-                modifier = Modifier.align(Alignment.End).testTag("clear_filters"),
-            ) { Text("Clear filters") }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

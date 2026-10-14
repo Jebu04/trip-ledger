@@ -54,6 +54,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Path
+import app.tripledger.domain.Dates
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -163,6 +167,38 @@ fun StatsScreen(onOpenEntry: (Long) -> Unit) {
                     }
                     if (ui.slices.isNotEmpty()) CategoryBreakdown(ui, ref, trip)
                     DailyChart(ui.perDay, ref, trip)
+                    CumulativeChart(ui.cumulative, ui.budgetLine, ref, trip)
+                    if (ui.byPayment.isNotEmpty()) {
+                        GroupPanel(
+                            title = "By payment method",
+                            tag = "by_payment",
+                            rows = ui.byPayment.map { slice ->
+                                GroupRow(
+                                    label = slice.key?.let { ref.paymentMap[it]?.name } ?: "No payment method",
+                                    detail = "${slice.count} ${if (slice.count == 1) "expense" else "expenses"}",
+                                    amount = ref.money(slice.total, trip.homeCurrency),
+                                    permille = slice.permille,
+                                )
+                            },
+                            dec = ref.settings.numberStyle.dec,
+                        )
+                    }
+                    if (ui.byCurrency.size > 1 || ui.byCurrency.any { it.key != trip.homeCurrency }) {
+                        GroupPanel(
+                            title = "By currency",
+                            tag = "by_currency",
+                            rows = ui.byCurrency.map { slice ->
+                                GroupRow(
+                                    label = "${slice.key} · ${ref.currency(slice.key).name}",
+                                    detail = if (slice.key == trip.homeCurrency) "${slice.count} ${if (slice.count == 1) "expense" else "expenses"}"
+                                    else "Paid " + ref.money(ui.currencyOriginals[slice.key] ?: 0L, slice.key),
+                                    amount = ref.money(slice.total, trip.homeCurrency),
+                                    permille = slice.permille,
+                                )
+                            },
+                            dec = ref.settings.numberStyle.dec,
+                        )
+                    }
                     if (ui.biggest.isNotEmpty()) {
                         StatsPanel("Biggest expenses") {
                             ui.biggest.forEachIndexed { i, item ->
@@ -174,6 +210,7 @@ fun StatsScreen(onOpenEntry: (Long) -> Unit) {
                     }
                 }
             }
+            if (ui.trips.size > 1) TripComparison(ui, ref)
         }
     }
 
@@ -207,14 +244,14 @@ fun DateFilterChip(label: String, value: Long?, ref: RefData, onClick: () -> Uni
 }
 
 @Composable
-private fun StatsPanel(title: String, content: @Composable () -> Unit) {
-    Panel(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+private fun StatsPanel(title: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Panel(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Column {
             Text(
                 title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp).semantics { heading() },
             )
             content()
         }
@@ -372,5 +409,158 @@ private fun DailyChart(days: List<DayTotal>, ref: RefData, trip: Trip) {
                 }
             }
         }
+    }
+}
+
+private data class GroupRow(val label: String, val detail: String, val amount: String, val permille: Int)
+
+/** A list of groups with their totals and share bars, e.g. spending per payment method. */
+@Composable
+private fun GroupPanel(title: String, tag: String, rows: List<GroupRow>, dec: Char) {
+    StatsPanel(title, Modifier.testTag(tag)) {
+        rows.forEach { row ->
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 7.dp).semantics(mergeDescendants = true) {}) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(row.label, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            row.detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Text(
+                        Stats.percentText(row.permille, dec),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 10.dp),
+                    )
+                    Text(row.amount, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                ) {
+                    if (row.permille > 0) {
+                        Box(
+                            Modifier.fillMaxHeight().fillMaxWidth((row.permille / 1000f).coerceIn(0.01f, 1f))
+                                .clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.primary),
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** Running total over the period, with the trip's budget drawn as a dashed line when it has one. */
+@Composable
+private fun CumulativeChart(points: List<DayTotal>, budget: Long?, ref: RefData, trip: Trip) {
+    // A single day has no line to draw, but the budget progress is still worth showing.
+    if (points.isEmpty() || (points.size < 2 && budget == null)) return
+    val line = MaterialTheme.colorScheme.primary
+    val fill = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    val budgetColor = MaterialTheme.colorScheme.error
+    val grid = MaterialTheme.colorScheme.outlineVariant
+    val last = points.last().total
+    val top = maxOf(points.maxOf { it.total }, budget ?: 0L, 1L).toFloat()
+    val bottom = minOf(points.minOf { it.total }, 0L).toFloat()
+    val description = buildString {
+        append("Running total reaches ${ref.money(last, trip.homeCurrency)} by ${ref.date(points.last().date)}")
+        if (budget != null) append(", against a budget of ${ref.money(budget, trip.homeCurrency)}")
+    }
+    StatsPanel("Running total", Modifier.testTag("cumulative_chart")) {
+        Text(
+            if (budget == null) "${ref.money(last, trip.homeCurrency)} so far"
+            else "${ref.money(last, trip.homeCurrency)} of ${ref.money(budget, trip.homeCurrency)} budget",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (budget != null && last > budget) budgetColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        if (points.size < 2) {
+            Spacer(Modifier.height(12.dp))
+            return@StatsPanel
+        }
+        Canvas(
+            Modifier.fillMaxWidth().height(150.dp).padding(horizontal = 16.dp, vertical = 12.dp)
+                .semantics { contentDescription = description },
+        ) {
+            val w = size.width
+            val h = size.height
+            fun x(i: Int) = if (points.size == 1) 0f else w * i / (points.size - 1)
+            fun y(v: Float) = h - (v - bottom) / (top - bottom) * h
+            drawLine(grid, Offset(0f, y(0f)), Offset(w, y(0f)), strokeWidth = 1.dp.toPx())
+            val path = Path().apply {
+                moveTo(x(0), y(points[0].total.toFloat()))
+                points.forEachIndexed { i, p -> if (i > 0) lineTo(x(i), y(p.total.toFloat())) }
+            }
+            val area = Path().apply {
+                addPath(path)
+                lineTo(x(points.lastIndex), y(0f))
+                lineTo(x(0), y(0f))
+                close()
+            }
+            drawPath(area, fill)
+            drawPath(path, line, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
+            if (budget != null) {
+                val by = y(budget.toFloat())
+                drawLine(
+                    budgetColor, Offset(0f, by), Offset(w, by), strokeWidth = 1.5.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx())),
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
+            Text(Dates.short(points.first().date), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.weight(1f))
+            Text(Dates.short(points.last().date), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Every trip side by side: total and daily average, each in that trip's own home currency. */
+@Composable
+private fun TripComparison(ui: StatsUi, ref: RefData) {
+    val maxAverage = ui.trips.filter { it.trip.homeCurrency == ui.trip?.homeCurrency }.maxOfOrNull { it.dailyAverage } ?: 0L
+    StatsPanel("All trips compared", Modifier.testTag("trip_comparison")) {
+        ui.trips.forEach { row ->
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 7.dp).semantics(mergeDescendants = true) {}) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            row.trip.name + if (row.current) " (this trip)" else "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (row.current) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "${ref.money(row.total, row.trip.homeCurrency)} over ${row.days} ${if (row.days == 1) "day" else "days"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        ref.money(row.dailyAverage, row.trip.homeCurrency) + " / day",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                // Bars only compare trips that share the current trip's home currency.
+                if (row.trip.homeCurrency == ui.trip?.homeCurrency && maxAverage > 0 && row.dailyAverage > 0) {
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        Modifier.fillMaxWidth((row.dailyAverage.toFloat() / maxAverage).coerceIn(0.02f, 1f)).height(5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (row.current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
     }
 }

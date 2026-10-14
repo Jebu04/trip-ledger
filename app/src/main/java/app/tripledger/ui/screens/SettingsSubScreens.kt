@@ -63,6 +63,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -128,16 +138,6 @@ private fun SubScreen(
 }
 
 @Composable
-private fun ReorderButtons(index: Int, count: Int, name: String, onMove: (Int) -> Unit) {
-    IconButton(onClick = { onMove(-1) }, enabled = index > 0) {
-        Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = "Move $name up")
-    }
-    IconButton(onClick = { onMove(1) }, enabled = index < count - 1) {
-        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Move $name down")
-    }
-}
-
-@Composable
 private fun ListCard(index: Int, count: Int, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     // First and last rows get the rounded corners so the list reads as one panel.
     val r = 16.dp
@@ -161,23 +161,23 @@ fun CategoriesScreen(onBack: () -> Unit) {
     var deletingId by rememberSaveable { mutableLongStateOf(-1L) }
 
     SubScreen("Categories", onBack, vm, onAdd = { editingId = 0 }, addDescription = "Add category") { padding, ref ->
-        LazyColumn(
-            Modifier.fillMaxSize().padding(padding).testTag("categories_list"),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
-        ) {
-            itemsIndexed(ref.categories, key = { _, c -> c.id }) { index, category ->
-                ListCard(index, ref.categories.size) {
-                    Row(
-                        Modifier.clickable { editingId = category.id }.testTag("category_row")
-                            .padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CategoryBadge(category.icon, category.color, size = 38.dp)
-                        Spacer(Modifier.width(14.dp))
-                        Text(category.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        ReorderButtons(index, ref.categories.size, category.name) { vm.moveCategory(category.id, it) }
-                    }
-                }
+        ReorderableList(
+            items = ref.categories,
+            key = { it.id },
+            name = { it.name },
+            onMoveTo = { category, index -> vm.moveCategoryTo(category.id, index) },
+            modifier = Modifier.fillMaxSize().padding(padding).testTag("categories_list"),
+            hint = "Drag the handle to reorder. The order is used everywhere categories are listed.",
+        ) { category, handle ->
+            Row(
+                Modifier.clickable(onClickLabel = "Edit") { editingId = category.id }.testTag("category_row")
+                    .padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CategoryBadge(category.icon, category.color, size = 38.dp)
+                Spacer(Modifier.width(14.dp))
+                Text(category.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                DragHandle(handle, category.name)
             }
         }
 
@@ -359,24 +359,24 @@ fun PaymentMethodsScreen(onBack: () -> Unit) {
                 "Payment methods are optional. Add one with the + button.", Modifier.padding(padding),
             )
         }
-        LazyColumn(
-            Modifier.fillMaxSize().padding(padding).testTag("payments_list"),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
-        ) {
-            itemsIndexed(ref.paymentMethods, key = { _, m -> m.id }) { index, method ->
-                ListCard(index, ref.paymentMethods.size) {
-                    Row(
-                        Modifier.clickable { editingId = method.id }.testTag("payment_row")
-                            .padding(start = 16.dp, top = 6.dp, bottom = 6.dp, end = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(method.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        ReorderButtons(index, ref.paymentMethods.size, method.name) { vm.movePaymentMethod(method.id, it) }
-                        IconButton(onClick = { deletingId = method.id }) {
-                            Icon(Icons.Rounded.DeleteOutline, contentDescription = "Delete ${method.name}")
-                        }
-                    }
+        ReorderableList(
+            items = ref.paymentMethods,
+            key = { it.id },
+            name = { it.name },
+            onMoveTo = { method, index -> vm.movePaymentMethodTo(method.id, index) },
+            modifier = Modifier.fillMaxSize().padding(padding).testTag("payments_list"),
+            hint = if (ref.paymentMethods.size > 1) "Drag the handle to reorder." else null,
+        ) { method, handle ->
+            Row(
+                Modifier.clickable(onClickLabel = "Rename") { editingId = method.id }.testTag("payment_row")
+                    .padding(start = 16.dp, top = 6.dp, bottom = 6.dp, end = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(method.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                IconButton(onClick = { deletingId = method.id }) {
+                    Icon(Icons.Rounded.DeleteOutline, contentDescription = "Delete ${method.name}")
                 }
+                DragHandle(handle, method.name)
             }
         }
 
@@ -630,4 +630,108 @@ private fun CurrencyDialog(
             }
         },
     )
+}
+
+/**
+ * A short list whose rows can be dragged into a new order by their handle. While dragging, the
+ * other rows slide out of the way; on release [onMoveTo] is called with the new position. For
+ * screen readers every row also offers "Move up" and "Move down" actions.
+ */
+@Composable
+private fun <T> ReorderableList(
+    items: List<T>,
+    key: (T) -> Any,
+    name: (T) -> String,
+    onMoveTo: (T, Int) -> Unit,
+    modifier: Modifier = Modifier,
+    hint: String? = null,
+    row: @Composable (T, Modifier) -> Unit,
+) {
+    // A local copy so a dropped row stays where it was put while the database catches up.
+    var order by remember(items) { mutableStateOf(items) }
+    var draggingKey by remember { mutableStateOf<Any?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var rowHeight by remember { mutableFloatStateOf(1f) }
+
+    val from = order.indexOfFirst { key(it) == draggingKey }
+    val target = if (from < 0) -1 else (from + Math.round(dragOffset / rowHeight)).coerceIn(0, order.lastIndex)
+
+    fun move(item: T, to: Int) {
+        val list = order.toMutableList()
+        val index = list.indexOfFirst { key(it) == key(item) }
+        if (index < 0 || to !in list.indices || to == index) return
+        list.add(to, list.removeAt(index))
+        order = list
+        onMoveTo(item, to)
+    }
+
+    Column(modifier.verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp)) {
+        if (hint != null) {
+            Text(
+                hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp),
+            )
+        }
+        order.forEachIndexed { index, item ->
+            val isDragged = index == from
+            val shift = when {
+                from < 0 || isDragged -> 0f
+                index in (from + 1)..target -> -rowHeight
+                index in target until from -> rowHeight
+                else -> 0f
+            }
+            val animatedShift by animateFloatAsState(shift, label = "reorder")
+            val handle = Modifier.pointerInput(key(item)) {
+                detectDragGestures(
+                    onDragStart = {
+                        draggingKey = key(item)
+                        dragOffset = 0f
+                    },
+                    onDragEnd = {
+                        val start = order.indexOfFirst { key(it) == draggingKey }
+                        val end = if (start < 0) -1 else (start + Math.round(dragOffset / rowHeight)).coerceIn(0, order.lastIndex)
+                        draggingKey = null
+                        dragOffset = 0f
+                        if (start >= 0) move(order[start], end)
+                    },
+                    onDragCancel = {
+                        draggingKey = null
+                        dragOffset = 0f
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        dragOffset += amount.y
+                    },
+                )
+            }
+            ListCard(
+                index, order.size,
+                Modifier
+                    .onSizeChanged { if (it.height > 0) rowHeight = it.height.toFloat() }
+                    .zIndex(if (isDragged) 1f else 0f)
+                    .graphicsLayer {
+                        translationY = if (isDragged) dragOffset else animatedShift
+                        shadowElevation = if (isDragged) 8.dp.toPx() else 0f
+                    }
+                    .semantics {
+                        customActions = buildList {
+                            if (index > 0) add(CustomAccessibilityAction("Move ${name(item)} up") { move(item, index - 1); true })
+                            if (index < order.lastIndex) add(CustomAccessibilityAction("Move ${name(item)} down") { move(item, index + 1); true })
+                        }
+                    },
+            ) { row(item, handle) }
+        }
+    }
+}
+
+@Composable
+private fun DragHandle(handle: Modifier, name: String) {
+    Box(
+        handle.size(48.dp).testTag("drag_handle").semantics { contentDescription = "Drag to reorder $name" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Rounded.DragHandle, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
