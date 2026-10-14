@@ -34,6 +34,9 @@ for the judgement calls, and [screenshots/](screenshots/) for the screens.
 - Your **OnePlus Nord CE** has the **release build** (version 1.0). The development build and its
   sample data were removed first, so the app starts empty.
 - The release APK is kept at `release/TripLedger-1.0-release.apk` (1.8 MB).
+- The code is in the private GitHub repository https://github.com/Jebu04/trip-ledger, and the
+  APK is attached to the release https://github.com/Jebu04/trip-ledger/releases/tag/v1.0.
+  The signing key is not on GitHub.
 
 ## The release build
 
